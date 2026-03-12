@@ -176,6 +176,20 @@ describe('parseSessionArtifacts', () => {
             timestamp: 1773306051847,
             modelId: 'copilot/claude-sonnet-4.6',
             message: { text: 'Why is this test flaky?' },
+            variableData: {
+              variables: [
+                {
+                  kind: 'file',
+                  value: {
+                    uri: { fsPath: '/tmp/repo-vscode/src/index.tsx' },
+                    range: {
+                      startLineNumber: 48,
+                      endLineNumber: 52
+                    }
+                  }
+                }
+              ]
+            },
             response: [{ kind: 'mcpServersStarting', didStartServerIds: [] }]
           }
         ]
@@ -183,7 +197,23 @@ describe('parseSessionArtifacts', () => {
       JSON.stringify({
         kind: 2,
         k: ['requests', 0, 'response'],
-        v: [{ value: 'The test is flaky due to a race condition in async setup.' }]
+        v: [
+          { value: 'The test is flaky due to a race condition in async setup.' },
+          { value: '```' },
+          {
+            kind: 'codeblockUri',
+            uri: { fsPath: '/tmp/repo-vscode/src/index.tsx' },
+            isEdit: true
+          },
+          {
+            kind: 'textEditGroup',
+            uri: { fsPath: '/tmp/repo-vscode/src/index.tsx' },
+            edits: [[{ text: 'initPreload', range: { startLineNumber: 88, endLineNumber: 88, startColumn: 29, endColumn: 48 } }], []],
+            done: true
+          },
+          { value: '```' },
+          { value: 'Pass `initPreload` directly instead of wrapping in an inline callback.' }
+        ]
       }),
       JSON.stringify({
         kind: 2,
@@ -218,8 +248,20 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].session.model).toBe('copilot/claude-sonnet-4.6')
     expect(parsed[0].messages).toHaveLength(4)
     expect(parsed[0].messages[0].role).toBe('user')
+    expect(parsed[0].messages[0].references).toEqual([{ path: '/tmp/repo-vscode/src/index.tsx', startLine: 48, endLine: 52 }])
     expect(parsed[0].messages[1].role).toBe('assistant')
     expect(parsed[0].messages[1].content).toContain('race condition')
+    expect(parsed[0].messages[1].content).toContain('Pass `initPreload` directly')
+    expect(parsed[0].messages[1].content).not.toContain('```')
+    expect(parsed[0].messages[1].edits).toEqual([
+      {
+        path: '/tmp/repo-vscode/src/index.tsx',
+        startLine: 88,
+        endLine: 88,
+        addedLines: 1,
+        removedLines: 1
+      }
+    ])
     expect(parsed[0].messages[2].content).toContain('What is the fix?')
     expect(parsed[0].messages[3].content).toContain('flushSync')
   })

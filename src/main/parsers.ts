@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { basename, dirname, extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { SessionMessage, SessionSource, SessionSummary } from '../shared/types'
 
 interface ParseContext {
@@ -366,15 +367,196 @@ const appendNestedValue = (target: Record<string, unknown>, path: Array<string |
   }
 }
 
-const extractVsCodeAssistantText = (responseItems: unknown[]): string | null => {
-  const chunks: string[] = []
-  for (const responseItem of responseItems) {
-    if (!responseItem || typeof responseItem !== 'object' || Array.isArray(responseItem)) {
+const toRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
+const toNumberOrNull = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const pathFromUriLike = (value: unknown): string | null => {
+  const record = toRecord(value)
+  if (!record) {
+    return null
+  }
+  const direct = firstString(record.fsPath, record.path)
+  if (direct) {
+    return direct
+  }
+  const external = firstString(record.external)
+  if (external?.startsWith('file://')) {
+    try {
+      return fileURLToPath(external)
+    } catch {
+      return external
+    }
+  }
+  return external
+}
+
+const extractVsCodeReferences = (request: Record<string, unknown>): NonNullable<SessionMessage['references']> => {
+  const references: NonNullable<SessionMessage['references']> = []
+  const variableData = toRecord(request.variableData)
+  const variables = Array.isArray(variableData?.variables) ? variableData.variables : []
+
+  for (const variable of variables) {
+    const variableRecord = toRecord(variable)
+    if (!variableRecord) {
       continue
     }
-    const item = responseItem as Record<string, unknown>
+    if (firstString(variableRecord.kind)?.toLowerCase() !== 'file') {
+      continue
+    }
+
+    const value = toRecord(variableRecord.value)
+    const path = pathFromUriLike(value?.uri) ?? firstString(variableRecord.name)
+    if (!path) {
+      continue
+    }
+
+    const range = toRecord(value?.range)
+    references.push({
+      path,
+      startLine: toNumberOrNull(range?.startLineNumber) ?? undefined,
+      endLine: toNumberOrNull(range?.endLineNumber) ?? undefined
+    })
+  }
+
+  const deduped = new Map<string, NonNullable<SessionMessage['references']>[number]>()
+  for (const reference of references) {
+    deduped.set(`${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`, reference)
+  }
+  return [...deduped.values()]
+}
+
+const normalizeLineDelta = (edit: Record<string, unknown>): { addedLines: number; removedLines: number } => {
+  const range = toRecord(edit.range)
+  const startLine = toNumberOrNull(range?.startLineNumber)
+  const endLine = toNumberOrNull(range?.endLineNumber)
+  const startColumn = toNumberOrNull(range?.startColumn)
+  const endColumn = toNumberOrNull(range?.endColumn)
+  const replacement = firstString(edit.text) ?? ''
+  const addedLines = Math.max(1, replacement.split('\n').length)
+
+  if (startLine === null || endLine === null) {
+    return { addedLines, removedLines: 1 }
+  }
+
+  const samePosition =
+    startLine === endLine &&
+    startColumn !== null &&
+    endColumn !== null &&
+    startColumn === endColumn
+  const removedLines = samePosition ? 0 : Math.max(1, endLine - startLine + 1)
+  return { addedLines, removedLines }
+}
+
+const extractVsCodeEdits = (responseItems: unknown[]): NonNullable<SessionMessage['edits']> => {
+  const byPath = new Map<string, NonNullable<SessionMessage['edits']>[number]>()
+
+  const ensure = (path: string): NonNullable<SessionMessage['edits']>[number] => {
+    const existing = byPath.get(path)
+    if (existing) {
+      return existing
+    }
+    const created: NonNullable<SessionMessage['edits']>[number] = { path, addedLines: 0, removedLines: 0 }
+    byPath.set(path, created)
+    return created
+  }
+
+  for (const responseItem of responseItems) {
+    const item = toRecord(responseItem)
+    if (!item) {
+      continue
+    }
     const kind = firstString(item.kind)?.toLowerCase()
-    if (kind === 'thinking' || kind === 'toolinvocationserialized' || kind === 'mcpserversstarting') {
+
+    if (kind === 'codeblockuri') {
+      const path = pathFromUriLike(item.uri)
+      if (path && item.isEdit === true) {
+        ensure(path)
+      }
+      continue
+    }
+
+    if (kind !== 'texteditgroup') {
+      continue
+    }
+
+    const path = pathFromUriLike(item.uri)
+    if (!path) {
+      continue
+    }
+    const aggregate = ensure(path)
+    const edits = Array.isArray(item.edits) ? item.edits : []
+    const editRecords: Record<string, unknown>[] = []
+    for (const entry of edits) {
+      if (Array.isArray(entry)) {
+        for (const nested of entry) {
+          const nestedRecord = toRecord(nested)
+          if (nestedRecord) {
+            editRecords.push(nestedRecord)
+          }
+        }
+        continue
+      }
+      const entryRecord = toRecord(entry)
+      if (entryRecord) {
+        editRecords.push(entryRecord)
+      }
+    }
+
+    for (const edit of editRecords) {
+      const range = toRecord(edit.range)
+      const startLine = toNumberOrNull(range?.startLineNumber)
+      const endLine = toNumberOrNull(range?.endLineNumber)
+      if (startLine !== null) {
+        aggregate.startLine = aggregate.startLine ? Math.min(aggregate.startLine, startLine) : startLine
+      }
+      if (endLine !== null) {
+        aggregate.endLine = aggregate.endLine ? Math.max(aggregate.endLine, endLine) : endLine
+      }
+
+      const delta = normalizeLineDelta(edit)
+      aggregate.addedLines = (aggregate.addedLines ?? 0) + delta.addedLines
+      aggregate.removedLines = (aggregate.removedLines ?? 0) + delta.removedLines
+    }
+  }
+
+  return [...byPath.values()]
+}
+
+const extractVsCodeAssistantText = (responseItems: unknown[]): string | null => {
+  const ignoredKinds = new Set([
+    'thinking',
+    'toolinvocationserialized',
+    'mcpserversstarting',
+    'texteditgroup',
+    'codeblockuri',
+    'undostop',
+    'inlinereference',
+    'questioncarousel',
+    'progresstaskserialized',
+    'progressmessage',
+    'workspaceedit',
+    'preparetoolinvocation'
+  ])
+  const chunks: string[] = []
+  for (const responseItem of responseItems) {
+    const item = toRecord(responseItem)
+    if (!item) {
+      continue
+    }
+    const kind = firstString(item.kind)?.toLowerCase()
+    if (kind && ignoredKinds.has(kind)) {
       continue
     }
 
@@ -388,15 +570,27 @@ const extractVsCodeAssistantText = (responseItems: unknown[]): string | null => 
       (item.content as Record<string, unknown> | undefined)?.value,
       (item.content as Record<string, unknown> | undefined)?.text
     )
-    if (content) {
-      chunks.push(content)
+    const trimmed = content?.trim()
+    if (!trimmed) {
+      continue
+    }
+    if (/^```[\w-]*$/.test(trimmed)) {
+      continue
+    }
+    chunks.push(trimmed)
+  }
+
+  const deduped: string[] = []
+  for (const chunk of chunks) {
+    if (!deduped.includes(chunk)) {
+      deduped.push(chunk)
     }
   }
 
-  if (chunks.length === 0) {
+  if (deduped.length === 0) {
     return null
   }
-  return [...new Set(chunks)].join('\n\n')
+  return deduped.join('\n\n')
 }
 
 const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSession[] => {
@@ -438,6 +632,7 @@ const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSe
       requestObject.prompt,
       requestObject.input
     )
+    const references = extractVsCodeReferences(requestObject)
     if (userText) {
       messages.push({
         id: stableId(sessionId, `vscode-u-${messageIndex}`, userText.slice(0, 24)),
@@ -445,13 +640,15 @@ const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSe
         role: 'user',
         content: userText,
         format: inferFormat(userText),
-        timestamp: requestTimestamp
+        timestamp: requestTimestamp,
+        references: references.length > 0 ? references : undefined
       })
       messageIndex += 1
     }
 
     const response = Array.isArray(requestObject.response) ? requestObject.response : []
     const assistantText = extractVsCodeAssistantText(response)
+    const edits = extractVsCodeEdits(response)
     if (assistantText) {
       messages.push({
         id: stableId(sessionId, `vscode-a-${messageIndex}`, assistantText.slice(0, 24)),
@@ -459,7 +656,8 @@ const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSe
         role: 'assistant',
         content: assistantText,
         format: inferFormat(assistantText),
-        timestamp: requestTimestamp
+        timestamp: requestTimestamp,
+        edits: edits.length > 0 ? edits : undefined
       })
       messageIndex += 1
     }

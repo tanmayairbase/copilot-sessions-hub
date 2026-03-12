@@ -39,7 +39,8 @@ const detail: SessionDetail = {
       role: 'user',
       content: 'question',
       format: 'text',
-      timestamp: '2026-03-11T10:01:00.000Z'
+      timestamp: '2026-03-11T10:01:00.000Z',
+      references: [{ path: '/repos/a/src/index.tsx', startLine: 48, endLine: 52 }]
     },
     {
       id: 'm4',
@@ -47,7 +48,8 @@ const detail: SessionDetail = {
       role: 'assistant',
       content: 'answer',
       format: 'text',
-      timestamp: '2026-03-11T10:02:00.000Z'
+      timestamp: '2026-03-11T10:02:00.000Z',
+      edits: [{ path: '/repos/a/src/index.tsx', startLine: 88, endLine: 88, addedLines: 1, removedLines: 1 }]
     }
   ]
 }
@@ -63,6 +65,8 @@ describe('SessionDetailView grouping', () => {
     const assistantBubbles = screen.getAllByLabelText('assistant message')
     expect(assistantBubbles).toHaveLength(2)
     expect(screen.getByText('Origin: CLI')).toBeTruthy()
+    expect(screen.getByText('index.tsx:48-52')).toBeTruthy()
+    expect(screen.getByText('Edited index.tsx +1 -1 (88-88)')).toBeTruthy()
     expect(screen.getByText(/line one/)).toBeTruthy()
     expect(screen.getByText(/line two/)).toBeTruthy()
     expect(screen.queryByText('Read-only transcript')).toBeNull()

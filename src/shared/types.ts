@@ -32,6 +32,18 @@ export interface SessionMessage {
   content: string
   format: 'markdown' | 'text' | 'ansi'
   timestamp: string
+  references?: Array<{
+    path: string
+    startLine?: number
+    endLine?: number
+  }>
+  edits?: Array<{
+    path: string
+    startLine?: number
+    endLine?: number
+    addedLines?: number
+    removedLines?: number
+  }>
 }
 
 export interface SessionDetail extends SessionSummary {

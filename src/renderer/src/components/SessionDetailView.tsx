@@ -24,6 +24,13 @@ interface MessageGroup {
   role: SessionMessage['role']
   combinedContent: string
   timestamp: string
+  references: NonNullable<SessionMessage['references']>
+  edits: NonNullable<SessionMessage['edits']>
+}
+
+const toFileLabel = (path: string): string => {
+  const normalized = path.replaceAll('\\', '/')
+  return normalized.split('/').at(-1) || path
 }
 
 const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
@@ -36,6 +43,35 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
 
     if (last && last.role === message.role && lastMinuteKey === minuteKey) {
       last.combinedContent = `${last.combinedContent}\n\n${message.content}`
+      if (message.references) {
+        for (const reference of message.references) {
+          const key = `${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`
+          const exists = last.references.some(
+            (item) => `${item.path}:${item.startLine ?? ''}:${item.endLine ?? ''}` === key
+          )
+          if (!exists) {
+            last.references.push(reference)
+          }
+        }
+      }
+      if (message.edits) {
+        for (const edit of message.edits) {
+          const existing = last.edits.find((item) => item.path === edit.path)
+          if (existing) {
+            existing.addedLines = (existing.addedLines ?? 0) + (edit.addedLines ?? 0)
+            existing.removedLines = (existing.removedLines ?? 0) + (edit.removedLines ?? 0)
+            if (edit.startLine !== undefined) {
+              existing.startLine =
+                existing.startLine !== undefined ? Math.min(existing.startLine, edit.startLine) : edit.startLine
+            }
+            if (edit.endLine !== undefined) {
+              existing.endLine = existing.endLine !== undefined ? Math.max(existing.endLine, edit.endLine) : edit.endLine
+            }
+          } else {
+            last.edits.push(edit)
+          }
+        }
+      }
       continue
     }
 
@@ -43,7 +79,9 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
       id: message.id,
       role: message.role,
       combinedContent: message.content,
-      timestamp: message.timestamp
+      timestamp: message.timestamp,
+      references: message.references ? [...message.references] : [],
+      edits: message.edits ? [...message.edits] : []
     })
   }
 
@@ -96,6 +134,39 @@ export const SessionDetailView = ({ detail, onCopySessionId }: Props) => {
             aria-label={`${message.role} message`}
           >
             <div className="message-role">{message.role === 'user' ? 'You' : 'Copilot'}</div>
+            {message.references.length > 0 && (
+              <div className="message-artifacts">
+                {message.references.map((reference) => {
+                  const label =
+                    reference.startLine && reference.endLine
+                      ? `${toFileLabel(reference.path)}:${reference.startLine}-${reference.endLine}`
+                      : toFileLabel(reference.path)
+                  return (
+                    <span key={`${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`} className="message-artifact-chip">
+                      {label}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+            {message.edits.length > 0 && (
+              <div className="message-artifacts">
+                {message.edits.map((edit) => {
+                  const lineRange =
+                    edit.startLine && edit.endLine ? ` (${edit.startLine}-${edit.endLine})` : ''
+                  const added = edit.addedLines ?? 0
+                  const removed = edit.removedLines ?? 0
+                  const delta = added > 0 || removed > 0 ? ` +${added} -${removed}` : ''
+                  return (
+                    <span key={`edit:${edit.path}`} className="message-artifact-chip">
+                      Edited {toFileLabel(edit.path)}
+                      {delta}
+                      {lineRange}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
             <div className="message-content">
               {message.role === 'assistant' ? (
                 <div dangerouslySetInnerHTML={{ __html: renderAssistantContent(message.combinedContent) }} />
