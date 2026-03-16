@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import AnsiToHtml from 'ansi-to-html'
 import { marked } from 'marked'
 import type { SessionDetail, SessionMessage } from '@shared/types'
@@ -17,13 +17,19 @@ const renderAssistantContent = (content: string): string => {
 interface Props {
   detail: SessionDetail | null
   onCopySessionId?: (sessionId: string) => Promise<void> | void
+  onToggleMessageStar?: (sessionId: string, messageId: string, starred: boolean) => Promise<void> | void
+  focusMessageId?: string | null
+  onFocusedMessageConsumed?: () => void
 }
 
 interface MessageGroup {
   id: string
+  primaryMessageId: string
+  messageIds: string[]
   role: SessionMessage['role']
   combinedContent: string
   timestamp: string
+  hasStarredMessage: boolean
   references: NonNullable<SessionMessage['references']>
   edits: NonNullable<SessionMessage['edits']>
 }
@@ -41,9 +47,11 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
     const last = groups[groups.length - 1]
     const lastMinuteKey = last ? formatMinuteKeyIST(last.timestamp) : ''
 
-    if (last && last.role === message.role && lastMinuteKey === minuteKey) {
-      last.combinedContent = `${last.combinedContent}\n\n${message.content}`
-      if (message.references) {
+      if (last && last.role === message.role && lastMinuteKey === minuteKey) {
+        last.combinedContent = `${last.combinedContent}\n\n${message.content}`
+        last.messageIds.push(message.id)
+        last.hasStarredMessage = last.hasStarredMessage || Boolean(message.userStarred)
+        if (message.references) {
         for (const reference of message.references) {
           const key = `${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`
           const exists = last.references.some(
@@ -77,9 +85,12 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
 
     groups.push({
       id: message.id,
+      primaryMessageId: message.id,
+      messageIds: [message.id],
       role: message.role,
       combinedContent: message.content,
       timestamp: message.timestamp,
+      hasStarredMessage: Boolean(message.userStarred),
       references: message.references ? [...message.references] : [],
       edits: message.edits ? [...message.edits] : []
     })
@@ -88,7 +99,32 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
   return groups
 }
 
-export const SessionDetailView = ({ detail, onCopySessionId }: Props) => {
+export const SessionDetailView = ({
+  detail,
+  onCopySessionId,
+  onToggleMessageStar,
+  focusMessageId,
+  onFocusedMessageConsumed
+}: Props) => {
+  useEffect(() => {
+    if (!focusMessageId) {
+      return
+    }
+    const target =
+      [...document.querySelectorAll<HTMLElement>('article[data-message-id-list]')].find((entry) =>
+        (entry.dataset.messageIdList ?? '').split(/\s+/).includes(focusMessageId)
+      ) ?? null
+    if (!target) {
+      return
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target.classList.add('message-focused')
+    window.setTimeout(() => {
+      target.classList.remove('message-focused')
+    }, 1200)
+    onFocusedMessageConsumed?.()
+  }, [focusMessageId, onFocusedMessageConsumed])
+
   if (!detail) {
     return (
       <section className="detail empty-state">
@@ -132,8 +168,24 @@ export const SessionDetailView = ({ detail, onCopySessionId }: Props) => {
             key={message.id}
             className={`message ${message.role === 'user' ? 'message-user' : 'message-assistant'}`}
             aria-label={`${message.role} message`}
+            data-message-id-list={message.messageIds.join(' ')}
           >
-            <div className="message-role">{message.role === 'user' ? 'You' : 'Copilot'}</div>
+            <div className="message-header">
+              <div className="message-role">{message.role === 'user' ? 'You' : 'Copilot'}</div>
+              <button
+                type="button"
+                className={`message-star ${message.hasStarredMessage ? 'active' : ''}`}
+                aria-label={message.hasStarredMessage ? 'Unstar message' : 'Star message'}
+                title={message.hasStarredMessage ? 'Unstar message' : 'Star message'}
+                onClick={() => {
+                  void onToggleMessageStar?.(detail.id, message.primaryMessageId, !message.hasStarredMessage)
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                </svg>
+              </button>
+            </div>
             {message.references.length > 0 && (
               <div className="message-artifacts">
                 {message.references.map((reference) => {

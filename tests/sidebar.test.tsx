@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { ComponentProps } from 'react'
+import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SessionSummary } from '../src/shared/types'
+import type { SessionSummary, StarredMessageSummary } from '../src/shared/types'
 import { SessionListSidebar } from '../src/renderer/src/components/SessionListSidebar'
 
 const sessions: SessionSummary[] = [
@@ -26,46 +28,88 @@ const archivedSession: SessionSummary = {
   userArchived: true
 }
 
+const starredMessages: StarredMessageSummary[] = [
+  {
+    sessionId: '1',
+    messageId: 'm1',
+    sessionTitle: 'Implement auth parser',
+    sessionSource: 'cli',
+    repoPath: '/repos/a',
+    role: 'assistant',
+    content: 'Use session-store summary for title',
+    timestamp: '2026-03-10T10:25:00.000Z',
+    stale: false,
+    starredAt: '2026-03-10T10:26:00.000Z'
+  }
+]
+
+const renderSidebar = (overrides: Partial<ComponentProps<typeof SessionListSidebar>> = {}) => {
+  const onSelect = vi.fn()
+  const onSetArchived = vi.fn()
+  const onSelectStarredMessage = vi.fn()
+  const onQueryChange = vi.fn()
+  const onClearFilters = vi.fn()
+  const onToggleRepo = vi.fn()
+  const onToggleModel = vi.fn()
+  const onToggleOrigin = vi.fn()
+  const onDateFilterChange = vi.fn()
+  const onArchivedFilterChange = vi.fn()
+  const onStarredFilterChange = vi.fn()
+
+  render(
+    <SessionListSidebar
+      sessions={sessions}
+      starredMessages={[]}
+      archivedSearchMatches={[]}
+      selectedId={null}
+      onSelect={onSelect}
+      onSelectStarredMessage={onSelectStarredMessage}
+      onSetArchived={onSetArchived}
+      query=""
+      onQueryChange={onQueryChange}
+      onClearFilters={onClearFilters}
+      repoOptions={['/repos/a', '/repos/b']}
+      selectedRepos={[]}
+      onToggleRepo={onToggleRepo}
+      modelOptions={['gpt-5.3-codex', 'claude-sonnet-4.5']}
+      selectedModels={[]}
+      onToggleModel={onToggleModel}
+      originOptions={['vscode', 'cli', 'opencode']}
+      selectedOrigins={[]}
+      onToggleOrigin={onToggleOrigin}
+      dateFilter=""
+      onDateFilterChange={onDateFilterChange}
+      archivedFilter="hide"
+      onArchivedFilterChange={onArchivedFilterChange}
+      starredFilter="all"
+      onStarredFilterChange={onStarredFilterChange}
+      hasActiveFilters={false}
+      {...overrides}
+    />
+  )
+
+  return {
+    onSelect,
+    onSetArchived,
+    onSelectStarredMessage,
+    onQueryChange,
+    onClearFilters,
+    onToggleRepo,
+    onToggleModel,
+    onToggleOrigin,
+    onDateFilterChange,
+    onArchivedFilterChange,
+    onStarredFilterChange
+  }
+}
+
 describe('SessionListSidebar', () => {
   afterEach(() => {
     cleanup()
   })
 
   it('renders sessions and supports search, selection, and filters', () => {
-    const onSelect = vi.fn()
-    const onQueryChange = vi.fn()
-    const onToggleRepo = vi.fn()
-    const onToggleModel = vi.fn()
-    const onToggleOrigin = vi.fn()
-    const onDateFilterChange = vi.fn()
-    const onClearFilters = vi.fn()
-
-    render(
-        <SessionListSidebar
-          sessions={sessions}
-          archivedSearchMatches={[]}
-          selectedId={null}
-          onSelect={onSelect}
-          onSetArchived={vi.fn()}
-          query=""
-          onQueryChange={onQueryChange}
-        onClearFilters={onClearFilters}
-        repoOptions={['/repos/a', '/repos/b']}
-        selectedRepos={[]}
-        onToggleRepo={onToggleRepo}
-        modelOptions={['gpt-5.3-codex', 'claude-sonnet-4.5']}
-        selectedModels={[]}
-        onToggleModel={onToggleModel}
-        originOptions={['vscode', 'cli', 'opencode']}
-        selectedOrigins={[]}
-        onToggleOrigin={onToggleOrigin}
-          dateFilter=""
-          onDateFilterChange={onDateFilterChange}
-          archivedFilter="hide"
-          onArchivedFilterChange={vi.fn()}
-          hasActiveFilters={false}
-        />
-    )
+    const { onSelect, onQueryChange, onToggleRepo, onToggleModel, onToggleOrigin, onDateFilterChange } = renderSidebar()
 
     fireEvent.click(screen.getByText('Implement auth parser'))
     expect(onSelect).toHaveBeenCalledWith('1')
@@ -93,66 +137,13 @@ describe('SessionListSidebar', () => {
   })
 
   it('shows clear-search button only when query exists and clears search', () => {
-    const onQueryChange = vi.fn()
-    render(
-      <SessionListSidebar
-        sessions={sessions}
-        archivedSearchMatches={[]}
-        selectedId={null}
-        onSelect={vi.fn()}
-        onSetArchived={vi.fn()}
-        query="auth"
-        onQueryChange={onQueryChange}
-        onClearFilters={vi.fn()}
-        repoOptions={['/repos/a']}
-        selectedRepos={[]}
-        onToggleRepo={vi.fn()}
-        modelOptions={['gpt-5.3-codex']}
-        selectedModels={[]}
-        onToggleModel={vi.fn()}
-        originOptions={['vscode', 'cli', 'opencode']}
-        selectedOrigins={[]}
-        onToggleOrigin={vi.fn()}
-        dateFilter=""
-        onDateFilterChange={vi.fn()}
-        archivedFilter="hide"
-        onArchivedFilterChange={vi.fn()}
-        hasActiveFilters={false}
-      />
-    )
-
+    const { onQueryChange } = renderSidebar({ query: 'auth' })
     fireEvent.click(screen.getByLabelText('Clear search'))
     expect(onQueryChange).toHaveBeenCalledWith('')
   })
 
   it('closes an open dropdown when clicking outside filters', () => {
-    render(
-      <SessionListSidebar
-        sessions={sessions}
-        archivedSearchMatches={[]}
-        selectedId={null}
-        onSelect={vi.fn()}
-        onSetArchived={vi.fn()}
-        query=""
-        onQueryChange={vi.fn()}
-        onClearFilters={vi.fn()}
-        repoOptions={['/repos/a']}
-        selectedRepos={[]}
-        onToggleRepo={vi.fn()}
-        modelOptions={['gpt-5.3-codex']}
-        selectedModels={[]}
-        onToggleModel={vi.fn()}
-        originOptions={['vscode', 'cli', 'opencode']}
-        selectedOrigins={[]}
-        onToggleOrigin={vi.fn()}
-        dateFilter=""
-        onDateFilterChange={vi.fn()}
-        archivedFilter="hide"
-        onArchivedFilterChange={vi.fn()}
-        hasActiveFilters={false}
-      />
-    )
-
+    renderSidebar()
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
     fireEvent.click(screen.getByLabelText('Repository filter'))
     expect(screen.getByLabelText('Repository: /repos/a')).toBeTruthy()
@@ -162,97 +153,22 @@ describe('SessionListSidebar', () => {
   })
 
   it('shows active filter indicator when filters are applied', () => {
-    const onClearFilters = vi.fn()
-    const { container } = render(
-      <SessionListSidebar
-        sessions={sessions}
-        archivedSearchMatches={[]}
-        selectedId={null}
-        onSelect={vi.fn()}
-        onSetArchived={vi.fn()}
-        query=""
-        onQueryChange={vi.fn()}
-        onClearFilters={onClearFilters}
-        repoOptions={['/repos/a']}
-        selectedRepos={['/repos/a']}
-        onToggleRepo={vi.fn()}
-        modelOptions={['gpt-5.3-codex']}
-        selectedModels={[]}
-        onToggleModel={vi.fn()}
-        originOptions={['vscode', 'cli', 'opencode']}
-        selectedOrigins={[]}
-        onToggleOrigin={vi.fn()}
-        dateFilter=""
-        onDateFilterChange={vi.fn()}
-        archivedFilter="hide"
-        onArchivedFilterChange={vi.fn()}
-        hasActiveFilters={true}
-      />
-    )
-
-    expect(container.querySelector('.filters-active-dot')).not.toBeNull()
+    const { onClearFilters } = renderSidebar({ selectedRepos: ['/repos/a'], hasActiveFilters: true })
+    expect(document.querySelector('.filters-active-dot')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
     expect(onClearFilters).toHaveBeenCalledTimes(1)
   })
 
   it('shows archived badge for sessions missing from latest sync', () => {
-    render(
-      <SessionListSidebar
-        sessions={[{ ...sessions[0], missingFromLastSync: true }]}
-        archivedSearchMatches={[]}
-        selectedId={null}
-        onSelect={vi.fn()}
-        onSetArchived={vi.fn()}
-        query=""
-        onQueryChange={vi.fn()}
-        onClearFilters={vi.fn()}
-        repoOptions={['/repos/a']}
-        selectedRepos={[]}
-        onToggleRepo={vi.fn()}
-        modelOptions={['gpt-5.3-codex']}
-        selectedModels={[]}
-        onToggleModel={vi.fn()}
-        originOptions={['vscode', 'cli', 'opencode']}
-        selectedOrigins={[]}
-        onToggleOrigin={vi.fn()}
-        dateFilter=""
-        onDateFilterChange={vi.fn()}
-        archivedFilter="hide"
-        onArchivedFilterChange={vi.fn()}
-        hasActiveFilters={false}
-      />
-    )
-
+    renderSidebar({ sessions: [{ ...sessions[0], missingFromLastSync: true }] })
     expect(screen.getByText('Archived')).toBeTruthy()
   })
 
   it('shows collapsed archived search section and expands on click', () => {
-    render(
-      <SessionListSidebar
-        sessions={sessions}
-        archivedSearchMatches={[archivedSession]}
-        selectedId={null}
-        onSelect={vi.fn()}
-        onSetArchived={vi.fn()}
-        query="parser"
-        onQueryChange={vi.fn()}
-        onClearFilters={vi.fn()}
-        repoOptions={['/repos/a']}
-        selectedRepos={[]}
-        onToggleRepo={vi.fn()}
-        modelOptions={['gpt-5.3-codex']}
-        selectedModels={[]}
-        onToggleModel={vi.fn()}
-        originOptions={['vscode', 'cli', 'opencode']}
-        selectedOrigins={[]}
-        onToggleOrigin={vi.fn()}
-        dateFilter=""
-        onDateFilterChange={vi.fn()}
-        archivedFilter="hide"
-        onArchivedFilterChange={vi.fn()}
-        hasActiveFilters={false}
-      />
-    )
+    renderSidebar({
+      archivedSearchMatches: [archivedSession],
+      query: 'parser'
+    })
 
     expect(screen.getByText('Archived matches (1)')).toBeTruthy()
     expect(screen.queryByText('Archived parser notes')).toBeNull()
@@ -261,70 +177,35 @@ describe('SessionListSidebar', () => {
   })
 
   it('opens context menu and archives session', () => {
-    const onSetArchived = vi.fn()
-    render(
-      <SessionListSidebar
-        sessions={sessions}
-        archivedSearchMatches={[]}
-        selectedId={null}
-        onSelect={vi.fn()}
-        onSetArchived={onSetArchived}
-        query=""
-        onQueryChange={vi.fn()}
-        onClearFilters={vi.fn()}
-        repoOptions={['/repos/a']}
-        selectedRepos={[]}
-        onToggleRepo={vi.fn()}
-        modelOptions={['gpt-5.3-codex']}
-        selectedModels={[]}
-        onToggleModel={vi.fn()}
-        originOptions={['vscode', 'cli', 'opencode']}
-        selectedOrigins={[]}
-        onToggleOrigin={vi.fn()}
-        dateFilter=""
-        onDateFilterChange={vi.fn()}
-        archivedFilter="hide"
-        onArchivedFilterChange={vi.fn()}
-        hasActiveFilters={false}
-      />
-    )
-
+    const { onSetArchived } = renderSidebar()
     fireEvent.contextMenu(screen.getByText('Implement auth parser'))
     fireEvent.click(screen.getByText('Archive session'))
     expect(onSetArchived).toHaveBeenCalledWith('1', true)
   })
 
   it('shows unarchive action for archived sessions', () => {
-    const onSetArchived = vi.fn()
-    render(
-      <SessionListSidebar
-        sessions={[archivedSession]}
-        archivedSearchMatches={[]}
-        selectedId={null}
-        onSelect={vi.fn()}
-        onSetArchived={onSetArchived}
-        query=""
-        onQueryChange={vi.fn()}
-        onClearFilters={vi.fn()}
-        repoOptions={['/repos/a']}
-        selectedRepos={[]}
-        onToggleRepo={vi.fn()}
-        modelOptions={['gpt-5.3-codex']}
-        selectedModels={[]}
-        onToggleModel={vi.fn()}
-        originOptions={['vscode', 'cli', 'opencode']}
-        selectedOrigins={[]}
-        onToggleOrigin={vi.fn()}
-        dateFilter=""
-        onDateFilterChange={vi.fn()}
-        archivedFilter="show"
-        onArchivedFilterChange={vi.fn()}
-        hasActiveFilters={true}
-      />
-    )
-
+    const { onSetArchived } = renderSidebar({
+      sessions: [archivedSession],
+      archivedFilter: 'show',
+      hasActiveFilters: true
+    })
     fireEvent.contextMenu(screen.getByText('Archived parser notes'))
     fireEvent.click(screen.getByText('Unarchive session'))
     expect(onSetArchived).toHaveBeenCalledWith('2', false)
+  })
+
+  it('shows starred section and opens parent session/message', () => {
+    const { onSelectStarredMessage } = renderSidebar({ starredMessages })
+    expect(screen.getByText('Starred (1)')).toBeTruthy()
+    fireEvent.click(screen.getByText('Starred (1)'))
+    fireEvent.click(screen.getByText('Use session-store summary for title'))
+    expect(onSelectStarredMessage).toHaveBeenCalledWith('1', 'm1')
+  })
+
+  it('supports starred filter control', () => {
+    const { onStarredFilterChange } = renderSidebar()
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+    fireEvent.change(screen.getByLabelText('Starred filter'), { target: { value: 'only' } })
+    expect(onStarredFilterChange).toHaveBeenCalledWith('only')
   })
 })

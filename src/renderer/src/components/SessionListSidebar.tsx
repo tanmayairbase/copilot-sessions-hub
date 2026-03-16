@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import type { SessionSource, SessionSummary } from '@shared/types'
+import React, { useEffect, useRef, useState } from 'react'
+import type { SessionSource, SessionSummary, StarredMessageSummary } from '@shared/types'
 import type { DateFilterPreset } from '@shared/format'
 import { formatSessionOrigin, formatTimestampIST, toSearchPreview, toTildePath } from '@shared/format'
 
@@ -7,12 +7,15 @@ type DateFilterValue = DateFilterPreset | ''
 type OriginFilterValue = SessionSource
 type FilterMenu = 'repository' | 'model' | 'origin' | null
 export type ArchivedFilterValue = 'hide' | 'show' | 'only'
+export type StarredFilterValue = 'all' | 'only'
 
 interface Props {
   sessions: SessionSummary[]
+  starredMessages: StarredMessageSummary[]
   archivedSearchMatches: SessionSummary[]
   selectedId: string | null
   onSelect: (id: string) => void
+  onSelectStarredMessage: (sessionId: string, messageId: string) => void
   onSetArchived: (sessionId: string, archived: boolean) => void
   query: string
   onQueryChange: (query: string) => void
@@ -30,6 +33,8 @@ interface Props {
   onDateFilterChange: (value: DateFilterValue) => void
   archivedFilter: ArchivedFilterValue
   onArchivedFilterChange: (value: ArchivedFilterValue) => void
+  starredFilter: StarredFilterValue
+  onStarredFilterChange: (value: StarredFilterValue) => void
   hasActiveFilters: boolean
 }
 
@@ -90,9 +95,11 @@ const MultiSelectFilter = ({
 
 export const SessionListSidebar = ({
   sessions,
+  starredMessages,
   archivedSearchMatches,
   selectedId,
   onSelect,
+  onSelectStarredMessage,
   onSetArchived,
   query,
   onQueryChange,
@@ -110,12 +117,15 @@ export const SessionListSidebar = ({
   onDateFilterChange,
   archivedFilter,
   onArchivedFilterChange,
+  starredFilter,
+  onStarredFilterChange,
   hasActiveFilters
 }: Props) => {
   const filterRootRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [openMenu, setOpenMenu] = useState<FilterMenu>(null)
   const [filtersExpanded, setFiltersExpanded] = useState(false)
+  const [starredExpanded, setStarredExpanded] = useState(false)
   const [archivedExpanded, setArchivedExpanded] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     sessionId: string
@@ -151,6 +161,7 @@ export const SessionListSidebar = ({
   }, [])
 
   useEffect(() => {
+    setStarredExpanded(false)
     setArchivedExpanded(false)
   }, [query])
 
@@ -310,11 +321,58 @@ export const SessionListSidebar = ({
                 <option value="only">Only archived</option>
               </select>
             </label>
+            <label className="filter-group">
+              <span className="filter-label">Starred</span>
+              <select
+                className="filter-select"
+                value={starredFilter}
+                onChange={(event) => onStarredFilterChange(event.target.value as StarredFilterValue)}
+                aria-label="Starred filter"
+              >
+                <option value="all">All sessions</option>
+                <option value="only">Only starred</option>
+              </select>
+            </label>
           </div>
         )}
       </div>
 
       <div className="session-list" role="listbox" aria-label="Session list">
+        {starredMessages.length > 0 && (
+          <section className="starred-section" aria-label="Starred messages">
+            <button
+              type="button"
+              className="starred-toggle"
+              aria-expanded={starredExpanded}
+              onClick={() => setStarredExpanded((value) => !value)}
+            >
+              <span>Starred ({starredMessages.length})</span>
+              <span>{starredExpanded ? '▾' : '▸'}</span>
+            </button>
+            {starredExpanded && (
+              <div className="starred-list">
+                {starredMessages.map((star) => (
+                  <button
+                    key={`${star.sessionId}:${star.messageId}`}
+                    type="button"
+                    className={`starred-item ${star.stale ? 'stale' : ''}`}
+                    onClick={() => onSelectStarredMessage(star.sessionId, star.messageId)}
+                  >
+                    <div className="starred-item-top">
+                      <span className="starred-item-role">{star.role === 'user' ? 'You' : 'Copilot'}</span>
+                      {star.stale && <span className="starred-item-stale">Stale</span>}
+                    </div>
+                    <div className="starred-item-content">{toSearchPreview(star.content, 92)}</div>
+                    <div className="starred-item-meta">
+                      <span>{toSearchPreview(star.sessionTitle, 48)}</span>
+                      <span>{formatTimestampIST(star.timestamp)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
         {sessions.map((session) => renderSessionRow(session))}
         {showArchivedSection && (
           <section className="archived-search-section" aria-label="Archived search matches">

@@ -34,6 +34,7 @@ export interface SessionMessage {
   content: string
   format: 'markdown' | 'text' | 'ansi'
   timestamp: string
+  userStarred?: boolean
   references?: Array<{
     path: string
     startLine?: number
@@ -46,6 +47,30 @@ export interface SessionMessage {
     addedLines?: number
     removedLines?: number
   }>
+}
+
+export interface MessageStarRecord {
+  sessionId: string
+  messageId: string
+  createdAt: string
+  updatedAt: string
+  stale: boolean
+  lastKnownRole: 'user' | 'assistant'
+  lastKnownContent: string
+  lastKnownTimestamp: string
+}
+
+export interface StarredMessageSummary {
+  sessionId: string
+  messageId: string
+  sessionTitle: string
+  sessionSource: SessionSource
+  repoPath: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+  stale: boolean
+  starredAt: string
 }
 
 export interface SessionDetail extends SessionSummary {
@@ -68,4 +93,6 @@ export interface RendererApi {
   getSessionDetail: (sessionId: string) => Promise<SessionDetail | null>
   openSessionInTool: (sessionId: string, tool: 'vscode' | 'cli') => Promise<{ ok: boolean; message: string }>
   setSessionArchived: (sessionId: string, archived: boolean) => Promise<SessionSummary | null>
+  setMessageStarred: (sessionId: string, messageId: string, starred: boolean) => Promise<MessageStarRecord | null>
+  listStarredMessages: (query: string) => Promise<StarredMessageSummary[]>
 }

@@ -358,6 +358,79 @@ button:hover {
   background: #11151d;
 }
 
+.starred-section {
+  border: 1px solid #384255;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.starred-toggle {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #151f31;
+  color: #dbeafe;
+  padding: 8px 10px;
+}
+
+.starred-list {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: #111827;
+}
+
+.starred-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #dbeafe;
+  padding: 9px;
+  display: grid;
+  gap: 6px;
+}
+
+.starred-item.stale {
+  border-color: #4b5563;
+  color: #cbd5e1;
+}
+
+.starred-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.starred-item-role {
+  color: #93c5fd;
+}
+
+.starred-item-stale {
+  border: 1px solid #4b5563;
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: #cbd5e1;
+}
+
+.starred-item-content {
+  font-size: 12px;
+  color: #d1d5db;
+}
+
+.starred-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
 .session-context-menu {
   position: fixed;
   z-index: 6;
@@ -488,6 +561,11 @@ button:hover {
   min-width: 0;
 }
 
+.message-focused {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
 .message-user {
   align-self: flex-end;
   background: #1d2a43;
@@ -503,6 +581,35 @@ button:hover {
   color: #9ca3af;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.message-star {
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-star svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+
+.message-star.active {
+  color: #fbbf24;
 }
 
 .message-artifacts {

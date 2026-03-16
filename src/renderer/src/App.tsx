@@ -1,9 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import type { AppConfig, RendererApi, SessionDetail, SessionSource, SessionSummary, SyncResult } from '@shared/types'
+import type {
+  AppConfig,
+  RendererApi,
+  SessionDetail,
+  SessionSource,
+  SessionSummary,
+  StarredMessageSummary,
+  SyncResult
+} from '@shared/types'
 import type { DateFilterPreset } from '@shared/format'
 import { matchesIstDatePreset, matchesRepositoryFilter } from '@shared/format'
 import { SessionDetailView } from './components/SessionDetailView'
-import { SessionListSidebar, type ArchivedFilterValue } from './components/SessionListSidebar'
+import {
+  SessionListSidebar,
+  type ArchivedFilterValue,
+  type StarredFilterValue
+} from './components/SessionListSidebar'
 import { SettingsModal } from './components/SettingsModal'
 
 const SIDEBAR_WIDTH_KEY = 'copilot-sessions-sidebar-width'
@@ -33,8 +45,11 @@ export const App = () => {
     []
   )
   const [sessions, setSessions] = useState<SessionSummary[]>([])
+  const [starredMessages, setStarredMessages] = useState<StarredMessageSummary[]>([])
+  const [allStarredMessages, setAllStarredMessages] = useState<StarredMessageSummary[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedDetail, setSelectedDetail] = useState<SessionDetail | null>(null)
+  const [focusMessageId, setFocusMessageId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
@@ -46,6 +61,7 @@ export const App = () => {
   const [selectedOrigins, setSelectedOrigins] = useState<SessionSource[]>([])
   const [dateFilter, setDateFilter] = useState<DateFilterValue>('')
   const [archivedFilter, setArchivedFilter] = useState<ArchivedFilterValue>('hide')
+  const [starredFilter, setStarredFilter] = useState<StarredFilterValue>('all')
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const value = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY) ?? '360')
     const bounds = getSidebarBounds(window.innerWidth)
@@ -61,10 +77,15 @@ export const App = () => {
 
   const refreshList = useCallback(async (query: string): Promise<void> => {
     uiLog('Refreshing session list', { query })
-    const rows = await ensureApi().listSessions(query)
+    const api = ensureApi()
+    const rows = await api.listSessions(query)
+    const stars = typeof api.listStarredMessages === 'function' ? await api.listStarredMessages(query) : []
+    const allStars = typeof api.listStarredMessages === 'function' ? await api.listStarredMessages('') : []
     setSessions(rows)
+    setStarredMessages(stars)
+    setAllStarredMessages(allStars)
     setSelectedId((previous) => (rows.some((row) => row.id === previous) ? previous : (rows[0]?.id ?? null)))
-    uiLog('Session list refreshed', { query, count: rows.length })
+    uiLog('Session list refreshed', { query, count: rows.length, stars: stars.length, allStars: allStars.length })
   }, [ensureApi])
 
   useEffect(() => {
@@ -180,26 +201,34 @@ export const App = () => {
   )
 
   const filteredSessions = useMemo(() => {
-    if (archivedFilter === 'show') {
-      return baseFilteredSessions
+    const byArchive =
+      archivedFilter === 'show'
+        ? baseFilteredSessions
+        : archivedFilter === 'only'
+          ? archivedSearchMatches
+          : baseFilteredSessions.filter((session) => !session.userArchived)
+
+    if (starredFilter === 'all') {
+      return byArchive
     }
-    if (archivedFilter === 'only') {
-      return archivedSearchMatches
-    }
-    return baseFilteredSessions.filter((session) => !session.userArchived)
-  }, [archivedFilter, archivedSearchMatches, baseFilteredSessions])
+    const starredSessionIds = new Set(allStarredMessages.map((star) => star.sessionId))
+    return byArchive.filter((session) => starredSessionIds.has(session.id))
+  }, [allStarredMessages, archivedFilter, archivedSearchMatches, baseFilteredSessions, starredFilter])
 
   useEffect(() => {
     const additionalSelectableIds =
       searchQuery.trim().length > 0 && archivedFilter === 'hide'
         ? new Set(archivedSearchMatches.map((session) => session.id))
         : new Set<string>()
+    for (const starred of starredMessages) {
+      additionalSelectableIds.add(starred.sessionId)
+    }
     setSelectedId((previous) =>
       filteredSessions.some((session) => session.id === previous) || (previous ? additionalSelectableIds.has(previous) : false)
         ? previous
         : (filteredSessions[0]?.id ?? null)
     )
-  }, [archivedFilter, archivedSearchMatches, filteredSessions, searchQuery])
+  }, [archivedFilter, archivedSearchMatches, filteredSessions, searchQuery, starredMessages])
 
   const onToggleRepo = useCallback((repoPath: string): void => {
     setSelectedRepos((current) =>
@@ -224,12 +253,17 @@ export const App = () => {
     setSelectedOrigins([])
     setDateFilter('')
     setArchivedFilter('hide')
+    setStarredFilter('all')
   }, [])
 
   const onSetArchived = useCallback(
     async (sessionId: string, archived: boolean): Promise<void> => {
       try {
-        await ensureApi().setSessionArchived(sessionId, archived)
+        const api = ensureApi()
+        if (typeof api.setSessionArchived !== 'function') {
+          throw new Error('Archive action unavailable. Restart pnpm dev so preload APIs refresh.')
+        }
+        await api.setSessionArchived(sessionId, archived)
         await refreshList(searchQuery)
         setToast(archived ? 'Session archived.' : 'Session unarchived.')
       } catch (error) {
@@ -238,6 +272,33 @@ export const App = () => {
     },
     [ensureApi, refreshList, searchQuery]
   )
+
+  const onToggleMessageStar = useCallback(
+    async (sessionId: string, messageId: string, starred: boolean): Promise<void> => {
+      try {
+        const api = ensureApi()
+        if (typeof api.setMessageStarred !== 'function') {
+          throw new Error('Star action unavailable. Restart pnpm dev so preload APIs refresh.')
+        }
+        await api.setMessageStarred(sessionId, messageId, starred)
+        const detail = await api.getSessionDetail(sessionId)
+        setSelectedDetail(detail)
+        const stars = await api.listStarredMessages(searchQuery)
+        const allStars = await api.listStarredMessages('')
+        setStarredMessages(stars)
+        setAllStarredMessages(allStars)
+        setToast(starred ? 'Message starred.' : 'Message unstarred.')
+      } catch (error) {
+        setToast(`Failed to update star state: ${(error as Error).message}`)
+      }
+    },
+    [ensureApi, searchQuery]
+  )
+
+  const onSelectStarredMessage = useCallback((sessionId: string, messageId: string): void => {
+    setSelectedId(sessionId)
+    setFocusMessageId(messageId)
+  }, [])
 
   const onSync = async (): Promise<void> => {
     setIsSyncing(true)
@@ -345,7 +406,8 @@ export const App = () => {
     selectedModels.length > 0 ||
     selectedOrigins.length > 0 ||
     Boolean(dateFilter) ||
-    archivedFilter !== 'hide'
+    archivedFilter !== 'hide' ||
+    starredFilter !== 'all'
 
   return (
     <div className="app-root">
@@ -369,9 +431,11 @@ export const App = () => {
         <div className="sidebar-shell" style={{ width: `${sidebarWidth}px` }}>
           <SessionListSidebar
             sessions={filteredSessions}
+            starredMessages={starredMessages}
             archivedSearchMatches={archivedSearchMatches}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            onSelectStarredMessage={onSelectStarredMessage}
             onSetArchived={(sessionId, archived) => void onSetArchived(sessionId, archived)}
             query={searchQuery}
             onQueryChange={setSearchQuery}
@@ -389,13 +453,21 @@ export const App = () => {
             onDateFilterChange={setDateFilter}
             archivedFilter={archivedFilter}
             onArchivedFilterChange={setArchivedFilter}
+            starredFilter={starredFilter}
+            onStarredFilterChange={setStarredFilter}
             hasActiveFilters={hasActiveFilters}
           />
         </div>
 
         <div className="resizer" onMouseDown={startResize} role="separator" aria-orientation="vertical" />
 
-        <SessionDetailView detail={selectedDetail} onCopySessionId={onCopySessionId} />
+        <SessionDetailView
+          detail={selectedDetail}
+          onCopySessionId={onCopySessionId}
+          onToggleMessageStar={(sessionId, messageId, starred) => void onToggleMessageStar(sessionId, messageId, starred)}
+          focusMessageId={focusMessageId}
+          onFocusedMessageConsumed={() => setFocusMessageId(null)}
+        />
       </main>
 
       {(syncResult || toast) && (

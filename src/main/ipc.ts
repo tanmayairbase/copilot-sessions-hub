@@ -44,6 +44,11 @@ export const registerIpcHandlers = (storage: SessionStorage, configService: Conf
     return storage.list(query ?? '')
   })
 
+  ipcMain.handle('sessions:list-starred', async (_event, query: string) => {
+    logInfo('IPC sessions:list-starred', { query: query ?? '' })
+    return storage.listStarredMessages(query ?? '')
+  })
+
   ipcMain.handle('sessions:get', async (_event, sessionId: string) => {
     logInfo('IPC sessions:get', { sessionId })
     return storage.getSessionDetail(sessionId)
@@ -52,6 +57,11 @@ export const registerIpcHandlers = (storage: SessionStorage, configService: Conf
   ipcMain.handle('sessions:set-archived', async (_event, sessionId: string, archived: boolean) => {
     logInfo('IPC sessions:set-archived', { sessionId, archived })
     return storage.setArchived(sessionId, archived)
+  })
+
+  ipcMain.handle('sessions:set-message-starred', async (_event, sessionId: string, messageId: string, starred: boolean) => {
+    logInfo('IPC sessions:set-message-starred', { sessionId, messageId, starred })
+    return storage.setMessageStarred(sessionId, messageId, starred)
   })
 
   ipcMain.handle('sessions:open-tool', async (_event, sessionId: string, tool: 'vscode' | 'cli') => {

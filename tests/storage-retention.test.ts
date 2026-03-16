@@ -196,4 +196,59 @@ describe('SessionStorage archival retention', () => {
     expect(storage.list('')).toHaveLength(0)
     expect(storage.getSessionDetail('session-prune-1')).toBeNull()
   })
+
+  it('keeps starred messages as stale bookmarks when upstream target disappears', async () => {
+    const tempDir = await fs.mkdtemp(join(tmpdir(), 'copilot-storage-retention-'))
+    const storage = new SessionStorage(join(tempDir, 'sessions-store.json'))
+
+    storage.mergeFromSync(
+      [makeInsert('session-star-1', '2026-03-03T00:00:00.000Z', 'ask', 'answer')],
+      '2026-03-03T02:00:00.000Z'
+    )
+    storage.setMessageStarred('session-star-1', 'session-star-1-a1', true)
+
+    storage.mergeFromSync(
+      [
+        {
+          session: {
+            id: 'session-star-1',
+            source: 'cli',
+            repoPath: '/tmp/repo',
+            title: 'ask changed',
+            model: 'gpt-5.3-codex',
+            createdAt: '2026-03-05T00:00:00.000Z',
+            updatedAt: '2026-03-05T00:00:00.000Z',
+            messageCount: 2,
+            filePath: '/tmp/repo/.copilot/session-star-1.json',
+            openVscodeTarget: '/tmp/repo/.copilot/session-star-1.json',
+            openCliCwd: '/tmp/repo'
+          },
+          messages: [
+            {
+              id: 'session-star-1-u2',
+              sessionId: 'session-star-1',
+              role: 'user',
+              content: 'ask changed',
+              format: 'text',
+              timestamp: '2026-03-05T00:00:00.000Z'
+            },
+            {
+              id: 'session-star-1-a2',
+              sessionId: 'session-star-1',
+              role: 'assistant',
+              content: 'answer changed',
+              format: 'text',
+              timestamp: '2026-03-05T00:00:00.000Z'
+            }
+          ]
+        }
+      ],
+      '2026-03-05T02:00:00.000Z'
+    )
+
+    const stars = storage.listStarredMessages('')
+    expect(stars).toHaveLength(1)
+    expect(stars[0]?.stale).toBe(true)
+    expect(stars[0]?.sessionId).toBe('session-star-1')
+  })
 })

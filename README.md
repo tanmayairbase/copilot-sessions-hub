@@ -14,6 +14,9 @@ Desktop Electron app (TypeScript + Node 24) that aggregates Copilot sessions fro
 - Archived sessions are hidden by default, can be shown via an Archived filter, and appear in a collapsed archived-search section when search matches exist.
 - Manually archived sessions auto-unarchive if upstream session activity changes on a later sync.
 - During sync, manually archived sessions older than four months are pruned from local storage.
+- Message-level starring for local bookmarks (user or assistant messages) in read-only detail view.
+- Collapsed **Starred** sidebar section with quick jump back to the parent session/message.
+- If a starred message target disappears upstream, bookmark is retained as a stale local entry.
 - Resizable sidebar list and detail pane chat UI.
 - **Read-only** session detail transcript (no in-app chatting/editing).
 - Session metadata with model + timestamp formatting as `MMM DD, YYYY HH:mm IST`.
