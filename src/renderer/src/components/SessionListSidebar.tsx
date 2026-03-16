@@ -387,7 +387,10 @@ export const SessionListSidebar = ({
         aria-label="Session list"
       >
         {starredMessages.length > 0 && (
-          <section className="starred-section" aria-label="Starred messages">
+          <section
+            className={`starred-section ${starredExpanded ? 'expanded' : ''}`}
+            aria-label="Starred messages"
+          >
             <button
               type="button"
               className="starred-toggle"

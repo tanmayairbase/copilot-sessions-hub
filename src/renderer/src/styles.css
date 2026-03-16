@@ -375,21 +375,30 @@ button:hover {
 }
 
 .starred-section {
-  border: 1px solid #384255;
-  border-radius: 10px;
-  overflow: hidden;
+  border: 0;
+  overflow: visible;
+}
+
+.starred-section:empty {
+  display: none;
 }
 
 .starred-toggle {
   width: 100%;
-  border: 0;
-  border-radius: 0;
+  border: 1px solid #384255;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   background: #151f31;
   color: #dbeafe;
   padding: 8px 10px;
+  min-height: 34px;
+}
+
+.starred-section.expanded .starred-toggle {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .starred-list {
@@ -397,6 +406,10 @@ button:hover {
   gap: 8px;
   padding: 8px;
   background: #111827;
+  border: 1px solid #384255;
+  border-top: 0;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
   max-height: min(44vh, 360px);
   overflow: auto;
 }
