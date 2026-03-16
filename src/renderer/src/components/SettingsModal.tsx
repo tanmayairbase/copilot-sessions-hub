@@ -34,8 +34,14 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
     setSaveError(null)
     try {
       await onSave({
-        repoRoots: repoRoots.split(/\r?\n/).map((item) => item.trim()).filter(Boolean),
-        explicitPatterns: explicitPatterns.split(/\r?\n/).map((item) => item.trim()).filter(Boolean),
+        repoRoots: repoRoots
+          .split(/\r?\n/)
+          .map(item => item.trim())
+          .filter(Boolean),
+        explicitPatterns: explicitPatterns
+          .split(/\r?\n/)
+          .map(item => item.trim())
+          .filter(Boolean),
         discoveryMode
       })
       onClose()
@@ -47,20 +53,36 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
   }
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Sync settings">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Sync settings"
+    >
       <div className="modal">
         <h3>Sync Settings</h3>
         <p>This controls where session sync looks for data.</p>
 
         <label>
           Repository roots (one per line)
-          <textarea value={repoRoots} onChange={(event) => setRepoRoots(event.target.value)} rows={6} />
+          <textarea
+            value={repoRoots}
+            onChange={event => setRepoRoots(event.target.value)}
+            rows={6}
+          />
         </label>
 
         <label>
           Discovery mode
-          <select value={discoveryMode} onChange={(event) => setDiscoveryMode(event.target.value as DiscoveryMode)}>
-            <option value="both">Both autodiscovery and explicit patterns</option>
+          <select
+            value={discoveryMode}
+            onChange={event =>
+              setDiscoveryMode(event.target.value as DiscoveryMode)
+            }
+          >
+            <option value="both">
+              Both autodiscovery and explicit patterns
+            </option>
             <option value="autodiscovery">Autodiscovery only</option>
             <option value="explicit">Explicit patterns only</option>
           </select>
@@ -68,14 +90,22 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
 
         <label>
           Explicit glob patterns (one per line)
-          <textarea value={explicitPatterns} onChange={(event) => setExplicitPatterns(event.target.value)} rows={5} />
+          <textarea
+            value={explicitPatterns}
+            onChange={event => setExplicitPatterns(event.target.value)}
+            rows={5}
+          />
         </label>
 
         <div className="modal-actions">
           <button type="button" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" onClick={() => void submit()} disabled={isSaving || !config}>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={isSaving || !config}
+          >
             {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>

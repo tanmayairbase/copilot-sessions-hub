@@ -40,7 +40,9 @@ const detail: SessionDetail = {
       content: 'Use `pnpm build` before deploy.',
       format: 'text',
       timestamp: '2026-03-11T10:01:00.000Z',
-      references: [{ path: '/repos/a/src/index.tsx', startLine: 48, endLine: 52 }]
+      references: [
+        { path: '/repos/a/src/index.tsx', startLine: 48, endLine: 52 }
+      ]
     },
     {
       id: 'm4',
@@ -49,7 +51,15 @@ const detail: SessionDetail = {
       content: 'answer',
       format: 'text',
       timestamp: '2026-03-11T10:02:00.000Z',
-      edits: [{ path: '/repos/a/src/index.tsx', startLine: 88, endLine: 88, addedLines: 1, removedLines: 1 }]
+      edits: [
+        {
+          path: '/repos/a/src/index.tsx',
+          startLine: 88,
+          endLine: 88,
+          addedLines: 1,
+          removedLines: 1
+        }
+      ]
     }
   ]
 }
@@ -76,7 +86,9 @@ describe('SessionDetailView grouping', () => {
 
   it('triggers copy callback from header icon button', () => {
     const onCopySessionId = vi.fn()
-    render(<SessionDetailView detail={detail} onCopySessionId={onCopySessionId} />)
+    render(
+      <SessionDetailView detail={detail} onCopySessionId={onCopySessionId} />
+    )
 
     fireEvent.click(screen.getByLabelText('Copy session ID'))
     expect(onCopySessionId).toHaveBeenCalledWith('s1')

@@ -10,7 +10,8 @@ import { SessionStorage } from './storage'
 const APP_DISPLAY_NAME = 'Copilot Sessions Hub'
 const CANONICAL_USER_DATA_DIR = 'Copilot Sessions Hub'
 const currentDir = fileURLToPath(new URL('.', import.meta.url))
-const devIconPath = (): string => join(process.cwd(), 'build/icons/robot-512.png')
+const devIconPath = (): string =>
+  join(process.cwd(), 'build/icons/robot-512.png')
 app.setName(APP_DISPLAY_NAME)
 
 const configureUserDataPath = (): string => {
@@ -21,12 +22,15 @@ const configureUserDataPath = (): string => {
 
 const newestCandidateFile = (paths: string[]): string | null => {
   const entries = paths
-    .filter((path) => existsSync(path))
-    .flatMap((path) => {
+    .filter(path => existsSync(path))
+    .flatMap(path => {
       try {
         return [{ path, mtimeMs: statSync(path).mtimeMs }]
       } catch (error) {
-        logWarn('Failed to stat migration candidate', { path, reason: (error as Error).message })
+        logWarn('Failed to stat migration candidate', {
+          path,
+          reason: (error as Error).message
+        })
         return []
       }
     })
@@ -40,7 +44,7 @@ const migrateLegacyUserData = (targetDir: string): void => {
   const legacyDirs = [
     join(appData, 'copilot-sessions-hub'),
     join(appData, 'Electron')
-  ].filter((candidate) => candidate !== targetDir && existsSync(candidate))
+  ].filter(candidate => candidate !== targetDir && existsSync(candidate))
 
   if (legacyDirs.length === 0) {
     return
@@ -53,7 +57,9 @@ const migrateLegacyUserData = (targetDir: string): void => {
       continue
     }
 
-    const sourceFile = newestCandidateFile(legacyDirs.map((dir) => join(dir, filename)))
+    const sourceFile = newestCandidateFile(
+      legacyDirs.map(dir => join(dir, filename))
+    )
     if (!sourceFile) {
       continue
     }
@@ -112,12 +118,18 @@ app.whenReady().then(async () => {
         logInfo('Applied custom dock icon for development', { iconPath })
       }
     } else {
-      logWarn('Custom dock icon not found; falling back to default', { iconPath })
+      logWarn('Custom dock icon not found; falling back to default', {
+        iconPath
+      })
     }
   }
 
-  const storage = new SessionStorage(join(app.getPath('userData'), 'sessions-store.json'))
-  const configService = new ConfigService(join(app.getPath('userData'), 'config.json'))
+  const storage = new SessionStorage(
+    join(app.getPath('userData'), 'sessions-store.json')
+  )
+  const configService = new ConfigService(
+    join(app.getPath('userData'), 'config.json')
+  )
 
   registerIpcHandlers(storage, configService)
   await createWindow()

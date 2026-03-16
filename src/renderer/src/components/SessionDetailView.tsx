@@ -2,9 +2,19 @@ import React, { useEffect } from 'react'
 import AnsiToHtml from 'ansi-to-html'
 import { marked } from 'marked'
 import type { SessionDetail, SessionMessage } from '@shared/types'
-import { formatMinuteKeyIST, formatSessionOrigin, formatTimestampIST, normalizeModelLabel } from '@shared/format'
+import {
+  formatMinuteKeyIST,
+  formatSessionOrigin,
+  formatTimestampIST,
+  normalizeModelLabel
+} from '@shared/format'
 
-const ansiConverter = new AnsiToHtml({ fg: '#e6edf3', bg: '#161b22', newline: true, escapeXML: true })
+const ansiConverter = new AnsiToHtml({
+  fg: '#e6edf3',
+  bg: '#161b22',
+  newline: true,
+  escapeXML: true
+})
 
 const renderAssistantContent = (content: string): string => {
   if (content.includes('\u001b[')) {
@@ -14,12 +24,17 @@ const renderAssistantContent = (content: string): string => {
   return marked.parse(content, { breaks: true }) as string
 }
 
-const renderUserContent = (content: string): string => marked.parse(content, { breaks: true }) as string
+const renderUserContent = (content: string): string =>
+  marked.parse(content, { breaks: true }) as string
 
 interface Props {
   detail: SessionDetail | null
   onCopySessionId?: (sessionId: string) => Promise<void> | void
-  onToggleMessageStar?: (sessionId: string, messageId: string, starred: boolean) => Promise<void> | void
+  onToggleMessageStar?: (
+    sessionId: string,
+    messageId: string,
+    starred: boolean
+  ) => Promise<void> | void
   focusMessageId?: string | null
   onFocusedMessageConsumed?: () => void
 }
@@ -49,15 +64,18 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
     const last = groups[groups.length - 1]
     const lastMinuteKey = last ? formatMinuteKeyIST(last.timestamp) : ''
 
-      if (last && last.role === message.role && lastMinuteKey === minuteKey) {
-        last.combinedContent = `${last.combinedContent}\n\n${message.content}`
-        last.messageIds.push(message.id)
-        last.hasStarredMessage = last.hasStarredMessage || Boolean(message.userStarred)
-        if (message.references) {
+    if (last && last.role === message.role && lastMinuteKey === minuteKey) {
+      last.combinedContent = `${last.combinedContent}\n\n${message.content}`
+      last.messageIds.push(message.id)
+      last.hasStarredMessage =
+        last.hasStarredMessage || Boolean(message.userStarred)
+      if (message.references) {
         for (const reference of message.references) {
           const key = `${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`
           const exists = last.references.some(
-            (item) => `${item.path}:${item.startLine ?? ''}:${item.endLine ?? ''}` === key
+            item =>
+              `${item.path}:${item.startLine ?? ''}:${item.endLine ?? ''}` ===
+              key
           )
           if (!exists) {
             last.references.push(reference)
@@ -66,16 +84,23 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
       }
       if (message.edits) {
         for (const edit of message.edits) {
-          const existing = last.edits.find((item) => item.path === edit.path)
+          const existing = last.edits.find(item => item.path === edit.path)
           if (existing) {
-            existing.addedLines = (existing.addedLines ?? 0) + (edit.addedLines ?? 0)
-            existing.removedLines = (existing.removedLines ?? 0) + (edit.removedLines ?? 0)
+            existing.addedLines =
+              (existing.addedLines ?? 0) + (edit.addedLines ?? 0)
+            existing.removedLines =
+              (existing.removedLines ?? 0) + (edit.removedLines ?? 0)
             if (edit.startLine !== undefined) {
               existing.startLine =
-                existing.startLine !== undefined ? Math.min(existing.startLine, edit.startLine) : edit.startLine
+                existing.startLine !== undefined
+                  ? Math.min(existing.startLine, edit.startLine)
+                  : edit.startLine
             }
             if (edit.endLine !== undefined) {
-              existing.endLine = existing.endLine !== undefined ? Math.max(existing.endLine, edit.endLine) : edit.endLine
+              existing.endLine =
+                existing.endLine !== undefined
+                  ? Math.max(existing.endLine, edit.endLine)
+                  : edit.endLine
             }
           } else {
             last.edits.push(edit)
@@ -113,8 +138,14 @@ export const SessionDetailView = ({
       return
     }
     const target =
-      [...document.querySelectorAll<HTMLElement>('article[data-message-id-list]')].find((entry) =>
-        (entry.dataset.messageIdList ?? '').split(/\s+/).includes(focusMessageId)
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          'article[data-message-id-list]'
+        )
+      ].find(entry =>
+        (entry.dataset.messageIdList ?? '')
+          .split(/\s+/)
+          .includes(focusMessageId)
       ) ?? null
     if (!target) {
       return
@@ -165,7 +196,7 @@ export const SessionDetailView = ({
       </header>
 
       <div className="message-thread">
-        {groupMessagesByMinute(detail.messages).map((message) => (
+        {groupMessagesByMinute(detail.messages).map(message => (
           <article
             key={message.id}
             className={`message ${message.role === 'user' ? 'message-user' : 'message-assistant'}`}
@@ -173,14 +204,24 @@ export const SessionDetailView = ({
             data-message-id-list={message.messageIds.join(' ')}
           >
             <div className="message-header">
-              <div className="message-role">{message.role === 'user' ? 'You' : 'Copilot'}</div>
+              <div className="message-role">
+                {message.role === 'user' ? 'You' : 'Copilot'}
+              </div>
               <button
                 type="button"
                 className={`message-star ${message.hasStarredMessage ? 'active' : ''}`}
-                aria-label={message.hasStarredMessage ? 'Unstar message' : 'Star message'}
-                title={message.hasStarredMessage ? 'Unstar message' : 'Star message'}
+                aria-label={
+                  message.hasStarredMessage ? 'Unstar message' : 'Star message'
+                }
+                title={
+                  message.hasStarredMessage ? 'Unstar message' : 'Star message'
+                }
                 onClick={() => {
-                  void onToggleMessageStar?.(detail.id, message.primaryMessageId, !message.hasStarredMessage)
+                  void onToggleMessageStar?.(
+                    detail.id,
+                    message.primaryMessageId,
+                    !message.hasStarredMessage
+                  )
                 }}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -190,13 +231,16 @@ export const SessionDetailView = ({
             </div>
             {message.references.length > 0 && (
               <div className="message-artifacts">
-                {message.references.map((reference) => {
+                {message.references.map(reference => {
                   const label =
                     reference.startLine && reference.endLine
                       ? `${toFileLabel(reference.path)}:${reference.startLine}-${reference.endLine}`
                       : toFileLabel(reference.path)
                   return (
-                    <span key={`${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`} className="message-artifact-chip">
+                    <span
+                      key={`${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`}
+                      className="message-artifact-chip"
+                    >
                       {label}
                     </span>
                   )
@@ -205,14 +249,20 @@ export const SessionDetailView = ({
             )}
             {message.edits.length > 0 && (
               <div className="message-artifacts">
-                {message.edits.map((edit) => {
+                {message.edits.map(edit => {
                   const lineRange =
-                    edit.startLine && edit.endLine ? ` (${edit.startLine}-${edit.endLine})` : ''
+                    edit.startLine && edit.endLine
+                      ? ` (${edit.startLine}-${edit.endLine})`
+                      : ''
                   const added = edit.addedLines ?? 0
                   const removed = edit.removedLines ?? 0
-                  const delta = added > 0 || removed > 0 ? ` +${added} -${removed}` : ''
+                  const delta =
+                    added > 0 || removed > 0 ? ` +${added} -${removed}` : ''
                   return (
-                    <span key={`edit:${edit.path}`} className="message-artifact-chip">
+                    <span
+                      key={`edit:${edit.path}`}
+                      className="message-artifact-chip"
+                    >
                       Edited {toFileLabel(edit.path)}
                       {delta}
                       {lineRange}
@@ -223,12 +273,22 @@ export const SessionDetailView = ({
             )}
             <div className="message-content">
               {message.role === 'assistant' ? (
-                <div dangerouslySetInnerHTML={{ __html: renderAssistantContent(message.combinedContent) }} />
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: renderAssistantContent(message.combinedContent)
+                  }}
+                />
               ) : (
-                <div dangerouslySetInnerHTML={{ __html: renderUserContent(message.combinedContent) }} />
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: renderUserContent(message.combinedContent)
+                  }}
+                />
               )}
             </div>
-            <time className="message-time">{formatTimestampIST(message.timestamp)}</time>
+            <time className="message-time">
+              {formatTimestampIST(message.timestamp)}
+            </time>
           </article>
         ))}
       </div>

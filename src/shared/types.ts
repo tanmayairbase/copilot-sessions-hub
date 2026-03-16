@@ -91,8 +91,18 @@ export interface RendererApi {
   syncSessions: () => Promise<SyncResult>
   listSessions: (query: string) => Promise<SessionSummary[]>
   getSessionDetail: (sessionId: string) => Promise<SessionDetail | null>
-  openSessionInTool: (sessionId: string, tool: 'vscode' | 'cli') => Promise<{ ok: boolean; message: string }>
-  setSessionArchived: (sessionId: string, archived: boolean) => Promise<SessionSummary | null>
-  setMessageStarred: (sessionId: string, messageId: string, starred: boolean) => Promise<MessageStarRecord | null>
+  openSessionInTool: (
+    sessionId: string,
+    tool: 'vscode' | 'cli'
+  ) => Promise<{ ok: boolean; message: string }>
+  setSessionArchived: (
+    sessionId: string,
+    archived: boolean
+  ) => Promise<SessionSummary | null>
+  setMessageStarred: (
+    sessionId: string,
+    messageId: string,
+    starred: boolean
+  ) => Promise<MessageStarRecord | null>
   listStarredMessages: (query: string) => Promise<StarredMessageSummary[]>
 }

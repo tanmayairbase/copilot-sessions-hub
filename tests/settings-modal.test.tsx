@@ -15,7 +15,14 @@ describe('SettingsModal', () => {
     const onClose = vi.fn()
     const onSave = vi.fn(async () => undefined)
 
-    render(<SettingsModal isOpen={true} config={baseConfig} onClose={onClose} onSave={onSave} />)
+    render(
+      <SettingsModal
+        isOpen={true}
+        config={baseConfig}
+        onClose={onClose}
+        onSave={onSave}
+      />
+    )
 
     fireEvent.change(screen.getByLabelText('Repository roots (one per line)'), {
       target: { value: '/Users/me/projects/airbase-frontend' }

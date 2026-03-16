@@ -35,8 +35,14 @@ export class ConfigService {
   constructor(private readonly configPath: string) {}
 
   private normalizeConfig(config: AppConfig): AppConfig {
-    const repoRoots = config.repoRoots.length > 0 ? config.repoRoots.map(expandHome) : defaultRoots
-    const explicitPatterns = config.explicitPatterns.length > 0 ? config.explicitPatterns : defaultPatterns
+    const repoRoots =
+      config.repoRoots.length > 0
+        ? config.repoRoots.map(expandHome)
+        : defaultRoots
+    const explicitPatterns =
+      config.explicitPatterns.length > 0
+        ? config.explicitPatterns
+        : defaultPatterns
     return { ...config, repoRoots, explicitPatterns }
   }
 
@@ -50,7 +56,10 @@ export class ConfigService {
         repoRoots: parsed.repoRoots.map(expandHome)
       })
 
-      if (normalized.repoRoots.length !== parsed.repoRoots.length || normalized.explicitPatterns.length !== parsed.explicitPatterns.length) {
+      if (
+        normalized.repoRoots.length !== parsed.repoRoots.length ||
+        normalized.explicitPatterns.length !== parsed.explicitPatterns.length
+      ) {
         logWarn('Config missing defaults, auto-filling', {
           requestedRepoRoots: parsed.repoRoots.length,
           normalizedRepoRoots: normalized.repoRoots.length
@@ -82,13 +91,19 @@ export class ConfigService {
   async save(config: AppConfig): Promise<AppConfig> {
     const parsed = appConfigSchema.parse({
       ...config,
-      repoRoots: config.repoRoots.map((value) => expandHome(value.trim())).filter(Boolean)
+      repoRoots: config.repoRoots
+        .map(value => expandHome(value.trim()))
+        .filter(Boolean)
     })
     const normalized = this.normalizeConfig(parsed)
 
     try {
       await fs.mkdir(dirname(this.configPath), { recursive: true })
-      await fs.writeFile(this.configPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8')
+      await fs.writeFile(
+        this.configPath,
+        `${JSON.stringify(normalized, null, 2)}\n`,
+        'utf8'
+      )
       logInfo('Config saved', {
         configPath: this.configPath,
         repoRoots: normalized.repoRoots.length,

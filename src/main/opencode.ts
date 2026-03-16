@@ -5,7 +5,13 @@ import type { SessionMessage, SessionSummary } from '../shared/types'
 import { logError, logInfo, logWarn } from './logger'
 import type { SessionInsert } from './storage'
 
-const OPENCODE_DB_PATH = join(homedir(), '.local', 'share', 'opencode', 'opencode.db')
+const OPENCODE_DB_PATH = join(
+  homedir(),
+  '.local',
+  'share',
+  'opencode',
+  'opencode.db'
+)
 const EPOCH_SECONDS_THRESHOLD = 10_000_000_000
 
 interface OpenCodeSessionRow {
@@ -59,7 +65,8 @@ const toIso = (value: unknown): string => {
 
   const asNumber = Number(value)
   if (Number.isFinite(asNumber) && asNumber > 0) {
-    const millis = asNumber < EPOCH_SECONDS_THRESHOLD ? asNumber * 1000 : asNumber
+    const millis =
+      asNumber < EPOCH_SECONDS_THRESHOLD ? asNumber * 1000 : asNumber
     return new Date(millis).toISOString()
   }
 
@@ -104,7 +111,7 @@ const inferFormat = (value: string): SessionMessage['format'] => {
 
 const inRepoRoots = (candidate: string, roots: string[]): boolean => {
   const resolvedCandidate = resolve(candidate)
-  return roots.some((root) => resolvedCandidate.startsWith(resolve(root)))
+  return roots.some(root => resolvedCandidate.startsWith(resolve(root)))
 }
 
 const normalizeRole = (value: unknown): SessionMessage['role'] | null => {
@@ -158,9 +165,13 @@ const collectMessageContent = (
   return firstString(messageData.summary)?.trim() ?? null
 }
 
-export const loadOpenCodeSessions = async (repoRoots: string[]): Promise<SessionInsert[]> => {
+export const loadOpenCodeSessions = async (
+  repoRoots: string[]
+): Promise<SessionInsert[]> => {
   if (!existsSync(OPENCODE_DB_PATH)) {
-    logInfo('OpenCode database not found, skipping OpenCode sync', { dbPath: OPENCODE_DB_PATH })
+    logInfo('OpenCode database not found, skipping OpenCode sync', {
+      dbPath: OPENCODE_DB_PATH
+    })
     return []
   }
 
@@ -189,7 +200,10 @@ export const loadOpenCodeSessions = async (repoRoots: string[]): Promise<Session
       .all() as unknown as OpenCodeSessionRow[]
 
     for (const sessionRow of sessionRows) {
-      if (!sessionRow.directory || !inRepoRoots(sessionRow.directory, repoRoots)) {
+      if (
+        !sessionRow.directory ||
+        !inRepoRoots(sessionRow.directory, repoRoots)
+      ) {
         continue
       }
 
@@ -233,13 +247,22 @@ export const loadOpenCodeSessions = async (repoRoots: string[]): Promise<Session
           continue
         }
 
-        const messageContent = collectMessageContent(role, messageData, partsByMessage.get(messageRow.id) ?? [])
+        const messageContent = collectMessageContent(
+          role,
+          messageData,
+          partsByMessage.get(messageRow.id) ?? []
+        )
         if (!messageContent) {
           continue
         }
 
         if (role === 'assistant') {
-          lastModel = firstString(messageData.model, messageData.modelID, messageData.providerID) ?? lastModel
+          lastModel =
+            firstString(
+              messageData.model,
+              messageData.modelID,
+              messageData.providerID
+            ) ?? lastModel
         }
 
         messages.push({
@@ -256,7 +279,9 @@ export const loadOpenCodeSessions = async (repoRoots: string[]): Promise<Session
         continue
       }
 
-      const titleSeed = messages.find((message) => message.role === 'user')?.content ?? messages[0].content
+      const titleSeed =
+        messages.find(message => message.role === 'user')?.content ??
+        messages[0].content
       const summary: SessionSummary = {
         id: scopedSessionId,
         source: 'opencode',

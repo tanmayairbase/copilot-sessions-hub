@@ -16,7 +16,11 @@ const formatMeta = (meta?: Record<string, unknown>): string => {
   }
 }
 
-const writeLog = (level: LogLevel, message: string, meta?: Record<string, unknown>): void => {
+const writeLog = (
+  level: LogLevel,
+  message: string,
+  meta?: Record<string, unknown>
+): void => {
   const line = `[${new Date().toISOString()}] [${level}] ${message}${formatMeta(meta)}`
   console.log(line)
 
@@ -27,7 +31,9 @@ const writeLog = (level: LogLevel, message: string, meta?: Record<string, unknow
   try {
     appendFileSync(logFilePath, `${line}\n`, 'utf8')
   } catch (error) {
-    console.error(`[logger] failed to write log file: ${(error as Error).message}`)
+    console.error(
+      `[logger] failed to write log file: ${(error as Error).message}`
+    )
   }
 }
 
@@ -39,14 +45,23 @@ export const initializeLogger = (userDataPath: string): string => {
   return logFilePath
 }
 
-export const logInfo = (message: string, meta?: Record<string, unknown>): void => {
+export const logInfo = (
+  message: string,
+  meta?: Record<string, unknown>
+): void => {
   writeLog('INFO', message, meta)
 }
 
-export const logWarn = (message: string, meta?: Record<string, unknown>): void => {
+export const logWarn = (
+  message: string,
+  meta?: Record<string, unknown>
+): void => {
   writeLog('WARN', message, meta)
 }
 
-export const logError = (message: string, meta?: Record<string, unknown>): void => {
+export const logError = (
+  message: string,
+  meta?: Record<string, unknown>
+): void => {
   writeLog('ERROR', message, meta)
 }

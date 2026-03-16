@@ -6,7 +6,10 @@ import { openInCli, openInVscode } from './openers'
 import { SessionStorage } from './storage'
 import { syncSessions } from './sync'
 
-export const registerIpcHandlers = (storage: SessionStorage, configService: ConfigService): void => {
+export const registerIpcHandlers = (
+  storage: SessionStorage,
+  configService: ConfigService
+): void => {
   logInfo('Registering IPC handlers')
 
   ipcMain.handle('config:get', async () => {
@@ -54,44 +57,57 @@ export const registerIpcHandlers = (storage: SessionStorage, configService: Conf
     return storage.getSessionDetail(sessionId)
   })
 
-  ipcMain.handle('sessions:set-archived', async (_event, sessionId: string, archived: boolean) => {
-    logInfo('IPC sessions:set-archived', { sessionId, archived })
-    return storage.setArchived(sessionId, archived)
-  })
-
-  ipcMain.handle('sessions:set-message-starred', async (_event, sessionId: string, messageId: string, starred: boolean) => {
-    logInfo('IPC sessions:set-message-starred', { sessionId, messageId, starred })
-    return storage.setMessageStarred(sessionId, messageId, starred)
-  })
-
-  ipcMain.handle('sessions:open-tool', async (_event, sessionId: string, tool: 'vscode' | 'cli') => {
-    logInfo('IPC sessions:open-tool', { sessionId, tool })
-    const detail = storage.getSessionDetail(sessionId)
-    if (!detail) {
-      logWarn('Cannot open tool: session detail missing', { sessionId, tool })
-      return { ok: false, message: 'Session not found.' }
+  ipcMain.handle(
+    'sessions:set-archived',
+    async (_event, sessionId: string, archived: boolean) => {
+      logInfo('IPC sessions:set-archived', { sessionId, archived })
+      return storage.setArchived(sessionId, archived)
     }
+  )
 
-    if (tool === 'vscode') {
+  ipcMain.handle(
+    'sessions:set-message-starred',
+    async (_event, sessionId: string, messageId: string, starred: boolean) => {
+      logInfo('IPC sessions:set-message-starred', {
+        sessionId,
+        messageId,
+        starred
+      })
+      return storage.setMessageStarred(sessionId, messageId, starred)
+    }
+  )
+
+  ipcMain.handle(
+    'sessions:open-tool',
+    async (_event, sessionId: string, tool: 'vscode' | 'cli') => {
+      logInfo('IPC sessions:open-tool', { sessionId, tool })
+      const detail = storage.getSessionDetail(sessionId)
+      if (!detail) {
+        logWarn('Cannot open tool: session detail missing', { sessionId, tool })
+        return { ok: false, message: 'Session not found.' }
+      }
+
+      if (tool === 'vscode') {
+        try {
+          return await openInVscode(detail.openVscodeTarget, detail.repoPath)
+        } catch (error) {
+          logError('Failed opening session in VS Code', {
+            sessionId,
+            reason: (error as Error).message
+          })
+          throw error
+        }
+      }
+
       try {
-        return await openInVscode(detail.openVscodeTarget, detail.repoPath)
+        return await openInCli(detail.openCliCwd, detail.id)
       } catch (error) {
-        logError('Failed opening session in VS Code', {
+        logError('Failed opening session in CLI', {
           sessionId,
           reason: (error as Error).message
         })
         throw error
       }
     }
-
-    try {
-      return await openInCli(detail.openCliCwd, detail.id)
-    } catch (error) {
-      logError('Failed opening session in CLI', {
-        sessionId,
-        reason: (error as Error).message
-      })
-      throw error
-    }
-  })
+  )
 }

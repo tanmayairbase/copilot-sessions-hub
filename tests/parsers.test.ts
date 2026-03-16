@@ -81,7 +81,8 @@ describe('parseSessionArtifacts', () => {
     ].join('\n')
 
     const parsed = parseSessionArtifacts(raw, {
-      filePath: '/Users/me/.copilot/session-state/session-events-1/events.jsonl',
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-1/events.jsonl',
       repoRoot: '/tmp/repo-events',
       source: 'cli'
     })
@@ -119,7 +120,8 @@ describe('parseSessionArtifacts', () => {
     ].join('\n')
 
     const parsed = parseSessionArtifacts(raw, {
-      filePath: '/Users/me/.copilot/session-state/session-events-cli/events.jsonl',
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-cli/events.jsonl',
       repoRoot: '/tmp/repo-events',
       source: 'cli'
     })
@@ -156,10 +158,13 @@ describe('parseSessionArtifacts', () => {
     ].join('\n')
 
     const parsed = parseSessionArtifacts(raw, {
-      filePath: '/Users/me/.copilot/session-state/session-events-cli-title/events.jsonl',
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-cli-title/events.jsonl',
       repoRoot: '/tmp/repo-events',
       source: 'cli',
-      cliSummaryBySessionId: new Map([['session-events-cli-title', 'Fix Sidebar Filter Layout']])
+      cliSummaryBySessionId: new Map([
+        ['session-events-cli-title', 'Fix Sidebar Filter Layout']
+      ])
     })
 
     expect(parsed).toHaveLength(1)
@@ -237,7 +242,9 @@ describe('parseSessionArtifacts', () => {
         kind: 2,
         k: ['requests', 0, 'response'],
         v: [
-          { value: 'The test is flaky due to a race condition in async setup.' },
+          {
+            value: 'The test is flaky due to a race condition in async setup.'
+          },
           { value: '```' },
           {
             kind: 'codeblockUri',
@@ -247,11 +254,27 @@ describe('parseSessionArtifacts', () => {
           {
             kind: 'textEditGroup',
             uri: { fsPath: '/tmp/repo-vscode/src/index.tsx' },
-            edits: [[{ text: 'initPreload', range: { startLineNumber: 88, endLineNumber: 88, startColumn: 29, endColumn: 48 } }], []],
+            edits: [
+              [
+                {
+                  text: 'initPreload',
+                  range: {
+                    startLineNumber: 88,
+                    endLineNumber: 88,
+                    startColumn: 29,
+                    endColumn: 48
+                  }
+                }
+              ],
+              []
+            ],
             done: true
           },
           { value: '```' },
-          { value: 'Pass `initPreload` directly instead of wrapping in an inline callback.' }
+          {
+            value:
+              'Pass `initPreload` directly instead of wrapping in an inline callback.'
+          }
         ]
       }),
       JSON.stringify({
@@ -270,12 +293,18 @@ describe('parseSessionArtifacts', () => {
       JSON.stringify({
         kind: 2,
         k: ['requests', 1, 'response'],
-        v: [{ value: 'Wrap the navigation in flushSync or move it to an effect after state settles.' }]
+        v: [
+          {
+            value:
+              'Wrap the navigation in flushSync or move it to an effect after state settles.'
+          }
+        ]
       })
     ].join('\n')
 
     const parsed = parseSessionArtifacts(raw, {
-      filePath: '/Users/me/Library/Application Support/Code/User/workspaceStorage/ws/chatSessions/vscode-chat-1.jsonl',
+      filePath:
+        '/Users/me/Library/Application Support/Code/User/workspaceStorage/ws/chatSessions/vscode-chat-1.jsonl',
       repoRoot: '/tmp/repo-vscode',
       source: 'vscode'
     })
@@ -287,10 +316,14 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].session.model).toBe('copilot/claude-sonnet-4.6')
     expect(parsed[0].messages).toHaveLength(4)
     expect(parsed[0].messages[0].role).toBe('user')
-    expect(parsed[0].messages[0].references).toEqual([{ path: '/tmp/repo-vscode/src/index.tsx', startLine: 48, endLine: 52 }])
+    expect(parsed[0].messages[0].references).toEqual([
+      { path: '/tmp/repo-vscode/src/index.tsx', startLine: 48, endLine: 52 }
+    ])
     expect(parsed[0].messages[1].role).toBe('assistant')
     expect(parsed[0].messages[1].content).toContain('race condition')
-    expect(parsed[0].messages[1].content).toContain('Pass `initPreload` directly')
+    expect(parsed[0].messages[1].content).toContain(
+      'Pass `initPreload` directly'
+    )
     expect(parsed[0].messages[1].content).not.toContain('```')
     expect(parsed[0].messages[1].edits).toEqual([
       {

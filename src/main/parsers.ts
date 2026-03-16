@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
 import { basename, dirname, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { SessionMessage, SessionSource, SessionSummary } from '../shared/types'
+import type {
+  SessionMessage,
+  SessionSource,
+  SessionSummary
+} from '../shared/types'
 
 interface ParseContext {
   filePath: string
@@ -15,7 +19,8 @@ export interface ParsedSession {
   messages: SessionMessage[]
 }
 
-const stableId = (...parts: string[]): string => createHash('sha1').update(parts.join('::')).digest('hex')
+const stableId = (...parts: string[]): string =>
+  createHash('sha1').update(parts.join('::')).digest('hex')
 
 const asString = (value: unknown): string | null => {
   if (typeof value === 'string' && value.trim()) {
@@ -37,12 +42,19 @@ const firstString = (...values: unknown[]): string | null => {
   return null
 }
 
-const inferSource = (filePath: string, fallback: SessionSource = 'cli'): SessionSource => {
+const inferSource = (
+  filePath: string,
+  fallback: SessionSource = 'cli'
+): SessionSource => {
   const normalized = filePath.toLowerCase()
   if (normalized.includes('opencode')) {
     return 'opencode'
   }
-  if (normalized.includes('/.vscode/') || normalized.includes('\\.vscode\\') || normalized.includes('vscode')) {
+  if (
+    normalized.includes('/.vscode/') ||
+    normalized.includes('\\.vscode\\') ||
+    normalized.includes('vscode')
+  ) {
     return 'vscode'
   }
   if (normalized.includes('copilot-cli') || normalized.includes('copilotcli')) {
@@ -56,7 +68,11 @@ const sourceFromHint = (value: unknown): SessionSource | null => {
   if (!hint) {
     return null
   }
-  if (hint.includes('vscode') || hint.includes('visual studio code') || hint.includes('cursor')) {
+  if (
+    hint.includes('vscode') ||
+    hint.includes('visual studio code') ||
+    hint.includes('cursor')
+  ) {
     return 'vscode'
   }
   if (hint.includes('opencode') || hint.includes('open code')) {
@@ -101,9 +117,26 @@ const toIso = (value: unknown, fallback = new Date().toISOString()): string => {
   return fallback
 }
 
-const toMessage = (candidate: any, sessionId: string, fallbackRole: 'user' | 'assistant', index: number): SessionMessage | null => {
-  const roleRaw = firstString(candidate.role, candidate.type, candidate.author, candidate.sender, candidate.from)
-  const role = roleRaw?.toLowerCase().includes('assistant') || roleRaw?.toLowerCase().includes('copilot') ? 'assistant' : roleRaw?.toLowerCase().includes('user') ? 'user' : fallbackRole
+const toMessage = (
+  candidate: any,
+  sessionId: string,
+  fallbackRole: 'user' | 'assistant',
+  index: number
+): SessionMessage | null => {
+  const roleRaw = firstString(
+    candidate.role,
+    candidate.type,
+    candidate.author,
+    candidate.sender,
+    candidate.from
+  )
+  const role =
+    roleRaw?.toLowerCase().includes('assistant') ||
+    roleRaw?.toLowerCase().includes('copilot')
+      ? 'assistant'
+      : roleRaw?.toLowerCase().includes('user')
+        ? 'user'
+        : fallbackRole
   const content = firstString(
     candidate.content,
     candidate.text,
@@ -119,7 +152,14 @@ const toMessage = (candidate: any, sessionId: string, fallbackRole: 'user' | 'as
     return null
   }
 
-  const timestamp = firstString(candidate.timestamp, candidate.time, candidate.createdAt, candidate.created_at, candidate.date) ?? new Date().toISOString()
+  const timestamp =
+    firstString(
+      candidate.timestamp,
+      candidate.time,
+      candidate.createdAt,
+      candidate.created_at,
+      candidate.date
+    ) ?? new Date().toISOString()
 
   return {
     id: stableId(sessionId, String(index), role, content.slice(0, 24)),
@@ -135,7 +175,12 @@ const fromTurns = (turns: any[], sessionId: string): SessionMessage[] => {
   const messages: SessionMessage[] = []
   let index = 0
   for (const turn of turns) {
-    const userContent = firstString(turn.prompt, turn.input, turn.user, turn.request)
+    const userContent = firstString(
+      turn.prompt,
+      turn.input,
+      turn.user,
+      turn.request
+    )
     if (userContent) {
       messages.push({
         id: stableId(sessionId, `u-${index}`, userContent.slice(0, 20)),
@@ -143,11 +188,18 @@ const fromTurns = (turns: any[], sessionId: string): SessionMessage[] => {
         role: 'user',
         content: userContent,
         format: inferFormat(userContent),
-        timestamp: new Date(firstString(turn.timestamp, turn.time, turn.createdAt) ?? Date.now()).toISOString()
+        timestamp: new Date(
+          firstString(turn.timestamp, turn.time, turn.createdAt) ?? Date.now()
+        ).toISOString()
       })
     }
 
-    const assistantContent = firstString(turn.response, turn.output, turn.assistant, turn.answer)
+    const assistantContent = firstString(
+      turn.response,
+      turn.output,
+      turn.assistant,
+      turn.answer
+    )
     if (assistantContent) {
       messages.push({
         id: stableId(sessionId, `a-${index}`, assistantContent.slice(0, 20)),
@@ -155,7 +207,14 @@ const fromTurns = (turns: any[], sessionId: string): SessionMessage[] => {
         role: 'assistant',
         content: assistantContent,
         format: inferFormat(assistantContent),
-        timestamp: new Date(firstString(turn.timestamp, turn.time, turn.updatedAt, turn.createdAt) ?? Date.now()).toISOString()
+        timestamp: new Date(
+          firstString(
+            turn.timestamp,
+            turn.time,
+            turn.updatedAt,
+            turn.createdAt
+          ) ?? Date.now()
+        ).toISOString()
       })
     }
     index += 1
@@ -163,30 +222,57 @@ const fromTurns = (turns: any[], sessionId: string): SessionMessage[] => {
   return messages
 }
 
-const normalizeSession = (candidate: any, context: ParseContext, ordinal: number): ParsedSession | null => {
-  const sessionId = firstString(candidate.id, candidate.sessionId, candidate.uuid) ?? stableId(context.filePath, String(ordinal))
+const normalizeSession = (
+  candidate: any,
+  context: ParseContext,
+  ordinal: number
+): ParsedSession | null => {
+  const sessionId =
+    firstString(candidate.id, candidate.sessionId, candidate.uuid) ??
+    stableId(context.filePath, String(ordinal))
 
   let messages: SessionMessage[] = []
 
   if (Array.isArray(candidate.messages)) {
     messages = candidate.messages
       .map((message: unknown, index: number) =>
-        toMessage(message, sessionId, index % 2 === 0 ? 'user' : 'assistant', index)
+        toMessage(
+          message,
+          sessionId,
+          index % 2 === 0 ? 'user' : 'assistant',
+          index
+        )
       )
-      .filter((message: SessionMessage | null): message is SessionMessage => Boolean(message))
+      .filter((message: SessionMessage | null): message is SessionMessage =>
+        Boolean(message)
+      )
   } else if (Array.isArray(candidate.turns)) {
     messages = fromTurns(candidate.turns, sessionId)
   } else if (Array.isArray(candidate.history)) {
     messages = candidate.history
       .map((message: unknown, index: number) =>
-        toMessage(message, sessionId, index % 2 === 0 ? 'user' : 'assistant', index)
+        toMessage(
+          message,
+          sessionId,
+          index % 2 === 0 ? 'user' : 'assistant',
+          index
+        )
       )
-      .filter((message: SessionMessage | null): message is SessionMessage => Boolean(message))
+      .filter((message: SessionMessage | null): message is SessionMessage =>
+        Boolean(message)
+      )
   }
 
   if (messages.length === 0 && Array.isArray(candidate)) {
     messages = candidate
-      .map((message, index) => toMessage(message, sessionId, index % 2 === 0 ? 'user' : 'assistant', index))
+      .map((message, index) =>
+        toMessage(
+          message,
+          sessionId,
+          index % 2 === 0 ? 'user' : 'assistant',
+          index
+        )
+      )
       .filter((message): message is SessionMessage => Boolean(message))
   }
 
@@ -194,18 +280,39 @@ const normalizeSession = (candidate: any, context: ParseContext, ordinal: number
     return null
   }
 
-  const userSeed = messages.find((message) => message.role === 'user')?.content ?? messages[0].content
-  const title = firstString(candidate.title, candidate.name, candidate.topic) ?? userSeed.slice(0, 80)
+  const userSeed =
+    messages.find(message => message.role === 'user')?.content ??
+    messages[0].content
+  const title =
+    firstString(candidate.title, candidate.name, candidate.topic) ??
+    userSeed.slice(0, 80)
 
   const createdAt = new Date(
-    firstString(candidate.createdAt, candidate.created_at, candidate.startedAt, messages[0]?.timestamp) ?? Date.now()
+    firstString(
+      candidate.createdAt,
+      candidate.created_at,
+      candidate.startedAt,
+      messages[0]?.timestamp
+    ) ?? Date.now()
   ).toISOString()
 
   const updatedAt = new Date(
-    firstString(candidate.updatedAt, candidate.updated_at, candidate.lastActivityAt, messages[messages.length - 1]?.timestamp) ?? Date.now()
+    firstString(
+      candidate.updatedAt,
+      candidate.updated_at,
+      candidate.lastActivityAt,
+      messages[messages.length - 1]?.timestamp
+    ) ?? Date.now()
   ).toISOString()
 
-  const repoPath = firstString(candidate.repoPath, candidate.workspacePath, candidate.cwd, candidate.repository, context.repoRoot) ?? context.repoRoot
+  const repoPath =
+    firstString(
+      candidate.repoPath,
+      candidate.workspacePath,
+      candidate.cwd,
+      candidate.repository,
+      context.repoRoot
+    ) ?? context.repoRoot
 
   const source =
     sourceFromHint(candidate.source) ??
@@ -218,13 +325,17 @@ const normalizeSession = (candidate: any, context: ParseContext, ordinal: number
     source,
     repoPath,
     title,
-    model: firstString(candidate.model, candidate.modelName, candidate.metadata?.model),
+    model: firstString(
+      candidate.model,
+      candidate.modelName,
+      candidate.metadata?.model
+    ),
     createdAt,
     updatedAt,
     messageCount: messages.length,
     filePath: context.filePath,
     openVscodeTarget: context.filePath,
-    openCliCwd: repoPath,
+    openCliCwd: repoPath
   }
 
   return { session, messages }
@@ -233,7 +344,7 @@ const normalizeSession = (candidate: any, context: ParseContext, ordinal: number
 const parseJsonLines = (raw: string): unknown[] => {
   const lines = raw
     .split(/\r?\n/)
-    .map((line) => line.trim())
+    .map(line => line.trim())
     .filter(Boolean)
 
   const output: unknown[] = []
@@ -259,7 +370,11 @@ interface VsCodeSessionMutation {
   v?: unknown
 }
 
-const setNestedValue = (target: Record<string, unknown>, path: Array<string | number>, value: unknown): void => {
+const setNestedValue = (
+  target: Record<string, unknown>,
+  path: Array<string | number>,
+  value: unknown
+): void => {
   if (path.length === 0) {
     return
   }
@@ -308,7 +423,11 @@ const setNestedValue = (target: Record<string, unknown>, path: Array<string | nu
   }
 }
 
-const appendNestedValue = (target: Record<string, unknown>, path: Array<string | number>, value: unknown): void => {
+const appendNestedValue = (
+  target: Record<string, unknown>,
+  path: Array<string | number>,
+  value: unknown
+): void => {
   if (path.length === 0) {
     return
   }
@@ -403,10 +522,14 @@ const pathFromUriLike = (value: unknown): string | null => {
   return external
 }
 
-const extractVsCodeReferences = (request: Record<string, unknown>): NonNullable<SessionMessage['references']> => {
+const extractVsCodeReferences = (
+  request: Record<string, unknown>
+): NonNullable<SessionMessage['references']> => {
   const references: NonNullable<SessionMessage['references']> = []
   const variableData = toRecord(request.variableData)
-  const variables = Array.isArray(variableData?.variables) ? variableData.variables : []
+  const variables = Array.isArray(variableData?.variables)
+    ? variableData.variables
+    : []
 
   for (const variable of variables) {
     const variableRecord = toRecord(variable)
@@ -431,14 +554,22 @@ const extractVsCodeReferences = (request: Record<string, unknown>): NonNullable<
     })
   }
 
-  const deduped = new Map<string, NonNullable<SessionMessage['references']>[number]>()
+  const deduped = new Map<
+    string,
+    NonNullable<SessionMessage['references']>[number]
+  >()
   for (const reference of references) {
-    deduped.set(`${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`, reference)
+    deduped.set(
+      `${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`,
+      reference
+    )
   }
   return [...deduped.values()]
 }
 
-const normalizeLineDelta = (edit: Record<string, unknown>): { addedLines: number; removedLines: number } => {
+const normalizeLineDelta = (
+  edit: Record<string, unknown>
+): { addedLines: number; removedLines: number } => {
   const range = toRecord(edit.range)
   const startLine = toNumberOrNull(range?.startLineNumber)
   const endLine = toNumberOrNull(range?.endLineNumber)
@@ -460,15 +591,23 @@ const normalizeLineDelta = (edit: Record<string, unknown>): { addedLines: number
   return { addedLines, removedLines }
 }
 
-const extractVsCodeEdits = (responseItems: unknown[]): NonNullable<SessionMessage['edits']> => {
+const extractVsCodeEdits = (
+  responseItems: unknown[]
+): NonNullable<SessionMessage['edits']> => {
   const byPath = new Map<string, NonNullable<SessionMessage['edits']>[number]>()
 
-  const ensure = (path: string): NonNullable<SessionMessage['edits']>[number] => {
+  const ensure = (
+    path: string
+  ): NonNullable<SessionMessage['edits']>[number] => {
     const existing = byPath.get(path)
     if (existing) {
       return existing
     }
-    const created: NonNullable<SessionMessage['edits']>[number] = { path, addedLines: 0, removedLines: 0 }
+    const created: NonNullable<SessionMessage['edits']>[number] = {
+      path,
+      addedLines: 0,
+      removedLines: 0
+    }
     byPath.set(path, created)
     return created
   }
@@ -520,22 +659,29 @@ const extractVsCodeEdits = (responseItems: unknown[]): NonNullable<SessionMessag
       const startLine = toNumberOrNull(range?.startLineNumber)
       const endLine = toNumberOrNull(range?.endLineNumber)
       if (startLine !== null) {
-        aggregate.startLine = aggregate.startLine ? Math.min(aggregate.startLine, startLine) : startLine
+        aggregate.startLine = aggregate.startLine
+          ? Math.min(aggregate.startLine, startLine)
+          : startLine
       }
       if (endLine !== null) {
-        aggregate.endLine = aggregate.endLine ? Math.max(aggregate.endLine, endLine) : endLine
+        aggregate.endLine = aggregate.endLine
+          ? Math.max(aggregate.endLine, endLine)
+          : endLine
       }
 
       const delta = normalizeLineDelta(edit)
       aggregate.addedLines = (aggregate.addedLines ?? 0) + delta.addedLines
-      aggregate.removedLines = (aggregate.removedLines ?? 0) + delta.removedLines
+      aggregate.removedLines =
+        (aggregate.removedLines ?? 0) + delta.removedLines
     }
   }
 
   return [...byPath.values()]
 }
 
-const extractVsCodeAssistantText = (responseItems: unknown[]): string | null => {
+const extractVsCodeAssistantText = (
+  responseItems: unknown[]
+): string | null => {
   const ignoredKinds = new Set([
     'thinking',
     'toolinvocationserialized',
@@ -594,7 +740,10 @@ const extractVsCodeAssistantText = (responseItems: unknown[]): string | null => 
   return deduped.join('\n\n')
 }
 
-const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSession[] => {
+const parseVsCodeChatSessionLog = (
+  raw: string,
+  context: ParseContext
+): ParsedSession[] => {
   const lines = parseJsonLines(raw) as VsCodeSessionMutation[]
   if (lines.length === 0) {
     return []
@@ -602,7 +751,12 @@ const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSe
 
   let sessionState: Record<string, unknown> = {}
   for (const line of lines) {
-    if (line.kind === 0 && line.v && typeof line.v === 'object' && !Array.isArray(line.v)) {
+    if (
+      line.kind === 0 &&
+      line.v &&
+      typeof line.v === 'object' &&
+      !Array.isArray(line.v)
+    ) {
       sessionState = line.v as Record<string, unknown>
       continue
     }
@@ -615,7 +769,9 @@ const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSe
     }
   }
 
-  const requests = Array.isArray(sessionState.requests) ? sessionState.requests : []
+  const requests = Array.isArray(sessionState.requests)
+    ? sessionState.requests
+    : []
   const sessionId =
     firstString(sessionState.sessionId) ??
     basename(context.filePath, extname(context.filePath))
@@ -627,7 +783,10 @@ const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSe
       continue
     }
     const requestObject = request as Record<string, unknown>
-    const requestTimestamp = toIso(requestObject.timestamp, toIso(sessionState.creationDate))
+    const requestTimestamp = toIso(
+      requestObject.timestamp,
+      toIso(sessionState.creationDate)
+    )
     const userText = firstString(
       (requestObject.message as Record<string, unknown> | undefined)?.text,
       requestObject.prompt,
@@ -636,7 +795,11 @@ const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSe
     const references = extractVsCodeReferences(requestObject)
     if (userText) {
       messages.push({
-        id: stableId(sessionId, `vscode-u-${messageIndex}`, userText.slice(0, 24)),
+        id: stableId(
+          sessionId,
+          `vscode-u-${messageIndex}`,
+          userText.slice(0, 24)
+        ),
         sessionId,
         role: 'user',
         content: userText,
@@ -647,12 +810,18 @@ const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSe
       messageIndex += 1
     }
 
-    const response = Array.isArray(requestObject.response) ? requestObject.response : []
+    const response = Array.isArray(requestObject.response)
+      ? requestObject.response
+      : []
     const assistantText = extractVsCodeAssistantText(response)
     const edits = extractVsCodeEdits(response)
     if (assistantText) {
       messages.push({
-        id: stableId(sessionId, `vscode-a-${messageIndex}`, assistantText.slice(0, 24)),
+        id: stableId(
+          sessionId,
+          `vscode-a-${messageIndex}`,
+          assistantText.slice(0, 24)
+        ),
         sessionId,
         role: 'assistant',
         content: assistantText,
@@ -671,28 +840,46 @@ const parseVsCodeChatSessionLog = (raw: string, context: ParseContext): ParsedSe
   const model =
     [...requests]
       .reverse()
-      .map((request) =>
+      .map(request =>
         firstString(
           (request as Record<string, unknown>)?.modelId,
-          ((request as Record<string, unknown>)?.modelState as Record<string, unknown> | undefined)?.modelId
+          (
+            (request as Record<string, unknown>)?.modelState as
+              | Record<string, unknown>
+              | undefined
+          )?.modelId
         )
       )
       .find((value): value is string => Boolean(value)) ??
     firstString(
-      ((sessionState.inputState as Record<string, unknown> | undefined)?.selectedModel as Record<string, unknown> | undefined)?.id,
-      ((sessionState.inputState as Record<string, unknown> | undefined)?.selectedModel as Record<string, unknown> | undefined)
-        ?.identifier
+      (
+        (sessionState.inputState as Record<string, unknown> | undefined)
+          ?.selectedModel as Record<string, unknown> | undefined
+      )?.id,
+      (
+        (sessionState.inputState as Record<string, unknown> | undefined)
+          ?.selectedModel as Record<string, unknown> | undefined
+      )?.identifier
     )
 
-  const titleSeed = messages.find((message) => message.role === 'user')?.content ?? messages[0].content
-  const createdAt = toIso(sessionState.creationDate, messages[0]?.timestamp ?? new Date().toISOString())
-  const updatedAt = toIso(messages[messages.length - 1]?.timestamp ?? createdAt, createdAt)
+  const titleSeed =
+    messages.find(message => message.role === 'user')?.content ??
+    messages[0].content
+  const createdAt = toIso(
+    sessionState.creationDate,
+    messages[0]?.timestamp ?? new Date().toISOString()
+  )
+  const updatedAt = toIso(
+    messages[messages.length - 1]?.timestamp ?? createdAt,
+    createdAt
+  )
 
   const session: SessionSummary = {
     id: sessionId,
     source: 'vscode',
     repoPath: context.repoRoot,
-    title: firstString(sessionState.customTitle)?.trim() || titleSeed.slice(0, 120),
+    title:
+      firstString(sessionState.customTitle)?.trim() || titleSeed.slice(0, 120),
     model,
     createdAt,
     updatedAt,
@@ -711,15 +898,18 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
     return []
   }
 
-  const sessionStart = lines.find((line) => line.type === 'session.start')
+  const sessionStart = lines.find(line => line.type === 'session.start')
   const sessionId =
     firstString(sessionStart?.data?.['sessionId']) ??
-    firstString(lines.find((line) => line.type === 'user.message')?.data?.['interactionId']) ??
+    firstString(
+      lines.find(line => line.type === 'user.message')?.data?.['interactionId']
+    ) ??
     basename(dirname(context.filePath))
 
   const repoPath =
     firstString(
-      sessionStart?.data?.['context'] && (sessionStart.data['context'] as Record<string, unknown>)['cwd'],
+      sessionStart?.data?.['context'] &&
+        (sessionStart.data['context'] as Record<string, unknown>)['cwd'],
       sessionStart?.data?.['cwd'],
       context.repoRoot
     ) ?? context.repoRoot
@@ -729,7 +919,9 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
     sourceFromHint(sessionStart?.data?.['producer']) ??
     sourceFromHint(sessionStart?.data?.['client']) ??
     sourceFromHint(sessionStart?.data?.['hostApplication']) ??
-    sourceFromHint(lines.find((line) => line.type === 'session.metadata')?.data?.['source'])
+    sourceFromHint(
+      lines.find(line => line.type === 'session.metadata')?.data?.['source']
+    )
 
   const copilotVersion = firstString(sessionStart?.data?.['copilotVersion'])
   const versionSource =
@@ -740,11 +932,13 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
         : null
 
   const detectedSource: SessionSource =
-    sourceHint ?? (versionSource as SessionSource | null) ?? inferSource(context.filePath, context.source)
+    sourceHint ??
+    (versionSource as SessionSource | null) ??
+    inferSource(context.filePath, context.source)
 
   const titleFromEvents = [...lines]
     .reverse()
-    .map((line) => {
+    .map(line => {
       if (line.type === 'session.title_changed') {
         return firstString(line.data?.['title'])
       }
@@ -763,11 +957,16 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
   for (const line of lines) {
     if (line.type === 'user.message') {
       const payload = line.data ?? {}
-      const content = firstString(payload['content'], payload['transformedContent'])
+      const content = firstString(
+        payload['content'],
+        payload['transformedContent']
+      )
       if (!content) {
         continue
       }
-      const timestamp = firstString(line.timestamp, payload['timestamp']) ?? new Date().toISOString()
+      const timestamp =
+        firstString(line.timestamp, payload['timestamp']) ??
+        new Date().toISOString()
       messages.push({
         id: stableId(sessionId, `u-${messageIndex}`, content.slice(0, 24)),
         sessionId,
@@ -786,7 +985,9 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
       if (!content) {
         continue
       }
-      const timestamp = firstString(line.timestamp, payload['timestamp']) ?? new Date().toISOString()
+      const timestamp =
+        firstString(line.timestamp, payload['timestamp']) ??
+        new Date().toISOString()
       messages.push({
         id: stableId(sessionId, `a-${messageIndex}`, content.slice(0, 24)),
         sessionId,
@@ -805,27 +1006,38 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
 
   const lastToolModel = [...lines]
     .reverse()
-    .map((line) => firstString(line.data?.['model']))
+    .map(line => firstString(line.data?.['model']))
     .find((value): value is string => Boolean(value))
 
-  const titleSeed = messages.find((message) => message.role === 'user')?.content ?? messages[0].content
+  const titleSeed =
+    messages.find(message => message.role === 'user')?.content ??
+    messages[0].content
   const cliSummaryTitle =
-    detectedSource === 'cli' ? firstString(context.cliSummaryBySessionId?.get(sessionId)) : null
+    detectedSource === 'cli'
+      ? firstString(context.cliSummaryBySessionId?.get(sessionId))
+      : null
   const preferredTitle = firstString(cliSummaryTitle, titleFromEvents)
-  const normalizedPreferredTitle = preferredTitle?.replace(/\s+/g, ' ').trim() ?? ''
-  const createdAt =
-    new Date(firstString(sessionStart?.data?.['startTime'], messages[0]?.timestamp) ?? Date.now()).toISOString()
-  const updatedAt = new Date(messages[messages.length - 1]?.timestamp ?? Date.now()).toISOString()
+  const normalizedPreferredTitle =
+    preferredTitle?.replace(/\s+/g, ' ').trim() ?? ''
+  const createdAt = new Date(
+    firstString(sessionStart?.data?.['startTime'], messages[0]?.timestamp) ??
+      Date.now()
+  ).toISOString()
+  const updatedAt = new Date(
+    messages[messages.length - 1]?.timestamp ?? Date.now()
+  ).toISOString()
 
   const session: SessionSummary = {
     id: sessionId,
     source: detectedSource,
     repoPath,
-    title: normalizedPreferredTitle ? normalizedPreferredTitle.slice(0, 120) : titleSeed.slice(0, 120),
+    title: normalizedPreferredTitle
+      ? normalizedPreferredTitle.slice(0, 120)
+      : titleSeed.slice(0, 120),
     model: firstString(
       lastToolModel,
       sessionStart?.data?.['model'],
-      lines.find((line) => line.type === 'assistant.message')?.data?.['model']
+      lines.find(line => line.type === 'assistant.message')?.data?.['model']
     ),
     createdAt,
     updatedAt,
@@ -838,7 +1050,10 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
   return [{ session, messages }]
 }
 
-export const parseSessionArtifacts = (raw: string, context: ParseContext): ParsedSession[] => {
+export const parseSessionArtifacts = (
+  raw: string,
+  context: ParseContext
+): ParsedSession[] => {
   if (
     context.filePath.includes('/chatSessions/') ||
     context.filePath.includes('\\chatSessions\\')
@@ -846,7 +1061,10 @@ export const parseSessionArtifacts = (raw: string, context: ParseContext): Parse
     return parseVsCodeChatSessionLog(raw, context)
   }
 
-  if (context.filePath.endsWith('/events.jsonl') || context.filePath.endsWith('\\events.jsonl')) {
+  if (
+    context.filePath.endsWith('/events.jsonl') ||
+    context.filePath.endsWith('\\events.jsonl')
+  ) {
     return parseEventLog(raw, context)
   }
 
@@ -873,8 +1091,11 @@ export const parseSessionArtifacts = (raw: string, context: ParseContext): Parse
   }
 
   return candidates
-    .map((candidate, index) => normalizeSession(candidate as any, context, index))
+    .map((candidate, index) =>
+      normalizeSession(candidate as any, context, index)
+    )
     .filter((session): session is ParsedSession => Boolean(session))
 }
 
-export const fallbackSessionTitle = (filePath: string): string => basename(filePath)
+export const fallbackSessionTitle = (filePath: string): string =>
+  basename(filePath)

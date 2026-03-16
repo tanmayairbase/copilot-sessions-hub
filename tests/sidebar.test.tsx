@@ -43,7 +43,9 @@ const starredMessages: StarredMessageSummary[] = [
   }
 ]
 
-const renderSidebar = (overrides: Partial<ComponentProps<typeof SessionListSidebar>> = {}) => {
+const renderSidebar = (
+  overrides: Partial<ComponentProps<typeof SessionListSidebar>> = {}
+) => {
   const onSelect = vi.fn()
   const onSetArchived = vi.fn()
   const onSelectStarredMessage = vi.fn()
@@ -109,12 +111,21 @@ describe('SessionListSidebar', () => {
   })
 
   it('renders sessions and supports search, selection, and filters', () => {
-    const { onSelect, onQueryChange, onToggleRepo, onToggleModel, onToggleOrigin, onDateFilterChange } = renderSidebar()
+    const {
+      onSelect,
+      onQueryChange,
+      onToggleRepo,
+      onToggleModel,
+      onToggleOrigin,
+      onDateFilterChange
+    } = renderSidebar()
 
     fireEvent.click(screen.getByText('Implement auth parser'))
     expect(onSelect).toHaveBeenCalledWith('1')
 
-    fireEvent.change(screen.getByLabelText('Search sessions'), { target: { value: 'auth' } })
+    fireEvent.change(screen.getByLabelText('Search sessions'), {
+      target: { value: 'auth' }
+    })
     expect(onQueryChange).toHaveBeenCalledWith('auth')
 
     expect(screen.queryByLabelText('Repository filter')).toBeNull()
@@ -132,7 +143,9 @@ describe('SessionListSidebar', () => {
     fireEvent.click(screen.getByLabelText('Origin: vscode'))
     expect(onToggleOrigin).toHaveBeenCalledWith('vscode')
 
-    fireEvent.change(screen.getByLabelText('Date filter'), { target: { value: 'last7' } })
+    fireEvent.change(screen.getByLabelText('Date filter'), {
+      target: { value: 'last7' }
+    })
     expect(onDateFilterChange).toHaveBeenCalledWith('last7')
   })
 
@@ -153,7 +166,10 @@ describe('SessionListSidebar', () => {
   })
 
   it('shows active filter indicator when filters are applied', () => {
-    const { onClearFilters } = renderSidebar({ selectedRepos: ['/repos/a'], hasActiveFilters: true })
+    const { onClearFilters } = renderSidebar({
+      selectedRepos: ['/repos/a'],
+      hasActiveFilters: true
+    })
     expect(document.querySelector('.filters-active-dot')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
     expect(onClearFilters).toHaveBeenCalledTimes(1)
@@ -205,7 +221,9 @@ describe('SessionListSidebar', () => {
   it('supports starred filter control', () => {
     const { onStarredFilterChange } = renderSidebar()
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
-    fireEvent.change(screen.getByLabelText('Starred filter'), { target: { value: 'only' } })
+    fireEvent.change(screen.getByLabelText('Starred filter'), {
+      target: { value: 'only' }
+    })
     expect(onStarredFilterChange).toHaveBeenCalledWith('only')
   })
 })

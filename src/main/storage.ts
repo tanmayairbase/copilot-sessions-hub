@@ -27,7 +27,11 @@ interface PersistedStore {
   stars: MessageStarRecord[]
 }
 
-const emptyStore = (): PersistedStore => ({ sessions: [], messages: [], stars: [] })
+const emptyStore = (): PersistedStore => ({
+  sessions: [],
+  messages: [],
+  stars: []
+})
 const ARCHIVE_PRUNE_MONTHS = 4
 
 const normalize = (value: string): string => value.toLowerCase()
@@ -73,7 +77,8 @@ const normalizeStarRecord = (star: MessageStarRecord): MessageStarRecord => {
     updatedAt,
     stale: Boolean(star.stale),
     lastKnownRole: star.lastKnownRole === 'assistant' ? 'assistant' : 'user',
-    lastKnownContent: typeof star.lastKnownContent === 'string' ? star.lastKnownContent : '',
+    lastKnownContent:
+      typeof star.lastKnownContent === 'string' ? star.lastKnownContent : '',
     lastKnownTimestamp: ensureIso(star.lastKnownTimestamp, updatedAt)
   }
 }
@@ -95,20 +100,28 @@ export class SessionStorage {
   private load(): PersistedStore {
     try {
       if (!existsSync(this.storagePath)) {
-        logWarn('Storage file missing, using empty store', { storagePath: this.storagePath })
+        logWarn('Storage file missing, using empty store', {
+          storagePath: this.storagePath
+        })
         return emptyStore()
       }
       const raw = readFileSync(this.storagePath, 'utf8')
       const parsed = JSON.parse(raw) as PersistedStore
       if (!Array.isArray(parsed.sessions) || !Array.isArray(parsed.messages)) {
-        logWarn('Storage file invalid structure, using empty store', { storagePath: this.storagePath })
+        logWarn('Storage file invalid structure, using empty store', {
+          storagePath: this.storagePath
+        })
         return emptyStore()
       }
       const parsedStars = Array.isArray((parsed as { stars?: unknown }).stars)
-        ? ((parsed as { stars?: MessageStarRecord[] }).stars ?? []).map((star) => normalizeStarRecord(star))
+        ? ((parsed as { stars?: MessageStarRecord[] }).stars ?? []).map(star =>
+            normalizeStarRecord(star)
+          )
         : []
       const normalized: PersistedStore = {
-        sessions: parsed.sessions.map((session) => normalizeSessionSummary(session)),
+        sessions: parsed.sessions.map(session =>
+          normalizeSessionSummary(session)
+        ),
         messages: parsed.messages,
         stars: parsedStars
       }
@@ -129,7 +142,11 @@ export class SessionStorage {
 
   private persist(): void {
     mkdirSync(dirname(this.storagePath), { recursive: true })
-    writeFileSync(this.storagePath, `${JSON.stringify(this.store, null, 2)}\n`, 'utf8')
+    writeFileSync(
+      this.storagePath,
+      `${JSON.stringify(this.store, null, 2)}\n`,
+      'utf8'
+    )
     logInfo('Storage persisted', {
       storagePath: this.storagePath,
       sessions: this.store.sessions.length,
@@ -144,11 +161,13 @@ export class SessionStorage {
     messagesBySession: ReadonlyMap<string, SessionMessage[]>
   ): MessageStarRecord[] {
     const output: MessageStarRecord[] = []
-    for (const star of stars.map((entry) => normalizeStarRecord(entry))) {
+    for (const star of stars.map(entry => normalizeStarRecord(entry))) {
       if (!sessionsById.has(star.sessionId)) {
         continue
       }
-      const liveMessage = (messagesBySession.get(star.sessionId) ?? []).find((message) => message.id === star.messageId)
+      const liveMessage = (messagesBySession.get(star.sessionId) ?? []).find(
+        message => message.id === star.messageId
+      )
       if (liveMessage) {
         output.push(
           normalizeStarRecord({
@@ -173,9 +192,9 @@ export class SessionStorage {
 
   replaceAll(rows: SessionInsert[]): void {
     logInfo('Replacing storage content', { rows: rows.length })
-    const sessions = rows.map((row) => normalizeSessionSummary(row.session))
-    const messages = rows.flatMap((row) => row.messages)
-    const sessionsById = new Map(sessions.map((session) => [session.id, session]))
+    const sessions = rows.map(row => normalizeSessionSummary(row.session))
+    const messages = rows.flatMap(row => row.messages)
+    const sessionsById = new Map(sessions.map(session => [session.id, session]))
     const messagesBySession = new Map<string, SessionMessage[]>()
     for (const message of messages) {
       const entries = messagesBySession.get(message.sessionId) ?? []
@@ -185,19 +204,30 @@ export class SessionStorage {
 
     this.store.sessions = sessions
     this.store.messages = messages
-    this.store.stars = this.reconcileStars(this.store.stars, sessionsById, messagesBySession)
+    this.store.stars = this.reconcileStars(
+      this.store.stars,
+      sessionsById,
+      messagesBySession
+    )
     this.persist()
   }
 
-  mergeFromSync(rows: SessionInsert[], syncedAt = new Date().toISOString()): MergeSyncResult {
+  mergeFromSync(
+    rows: SessionInsert[],
+    syncedAt = new Date().toISOString()
+  ): MergeSyncResult {
     logInfo('Merging sync rows into storage', { rows: rows.length, syncedAt })
 
     const existingSessionsById = new Map(
-      this.store.sessions.map((session) => [session.id, normalizeSessionSummary(session)])
+      this.store.sessions.map(session => [
+        session.id,
+        normalizeSessionSummary(session)
+      ])
     )
     const existingMessagesBySession = new Map<string, SessionMessage[]>()
     for (const message of this.store.messages) {
-      const rowsForSession = existingMessagesBySession.get(message.sessionId) ?? []
+      const rowsForSession =
+        existingMessagesBySession.get(message.sessionId) ?? []
       rowsForSession.push(message)
       existingMessagesBySession.set(message.sessionId, rowsForSession)
     }
@@ -220,15 +250,21 @@ export class SessionStorage {
       }
 
       const upstreamChanged = existing
-        ? new Date(normalizedIncoming.updatedAt).getTime() > new Date(existing.updatedAt).getTime() ||
+        ? new Date(normalizedIncoming.updatedAt).getTime() >
+            new Date(existing.updatedAt).getTime() ||
           normalizedIncoming.messageCount !== existing.messageCount
         : true
-      const preserveManualArchive = Boolean(existing?.userArchived && !upstreamChanged)
-      const archiveTimestamp = preserveManualArchive ? existing?.userArchivedAt : undefined
+      const preserveManualArchive = Boolean(
+        existing?.userArchived && !upstreamChanged
+      )
+      const archiveTimestamp = preserveManualArchive
+        ? existing?.userArchivedAt
+        : undefined
 
       nextSessionsById.set(normalizedIncoming.id, {
         ...normalizedIncoming,
-        firstSeenAt: existing?.firstSeenAt ?? normalizedIncoming.firstSeenAt ?? syncedAt,
+        firstSeenAt:
+          existing?.firstSeenAt ?? normalizedIncoming.firstSeenAt ?? syncedAt,
         lastSeenAt: syncedAt,
         missingFromLastSync: false,
         userArchived: preserveManualArchive,
@@ -247,7 +283,10 @@ export class SessionStorage {
       })
     }
 
-    const pruneCutoff = subtractMonthsUtc(syncedAt, ARCHIVE_PRUNE_MONTHS).getTime()
+    const pruneCutoff = subtractMonthsUtc(
+      syncedAt,
+      ARCHIVE_PRUNE_MONTHS
+    ).getTime()
     let prunedArchivedSessions = 0
     for (const [sessionId, session] of nextSessionsById.entries()) {
       if (!session.userArchived) {
@@ -264,10 +303,16 @@ export class SessionStorage {
 
     this.store.sessions = [...nextSessionsById.values()]
     this.store.messages = [...nextMessagesBySession.values()].flat()
-    this.store.stars = this.reconcileStars(this.store.stars, nextSessionsById, nextMessagesBySession)
+    this.store.stars = this.reconcileStars(
+      this.store.stars,
+      nextSessionsById,
+      nextMessagesBySession
+    )
     this.persist()
 
-    const archivedSessions = this.store.sessions.filter((session) => session.missingFromLastSync).length
+    const archivedSessions = this.store.sessions.filter(
+      session => session.missingFromLastSync
+    ).length
     const result: MergeSyncResult = {
       newSessions,
       updatedSessions,
@@ -289,7 +334,8 @@ export class SessionStorage {
     const trimmed = query.trim()
     if (!trimmed) {
       const results = [...this.store.sessions].sort(
-        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       )
       logInfo('Listed sessions without query', { count: results.length })
       return results
@@ -304,7 +350,7 @@ export class SessionStorage {
     }
 
     const results = this.store.sessions
-      .filter((session) => {
+      .filter(session => {
         const haystack = [
           session.id,
           session.title,
@@ -316,26 +362,37 @@ export class SessionStorage {
           .toLowerCase()
         return haystack.includes(needle)
       })
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    logInfo('Listed sessions with query', { query: trimmed, count: results.length })
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )
+    logInfo('Listed sessions with query', {
+      query: trimmed,
+      count: results.length
+    })
     return results
   }
 
   getSessionDetail(sessionId: string): SessionDetail | null {
-    const session = this.store.sessions.find((row) => row.id === sessionId)
+    const session = this.store.sessions.find(row => row.id === sessionId)
     if (!session) {
       logWarn('Session detail not found', { sessionId })
       return null
     }
 
     const starredMessageIds = new Set(
-      this.store.stars.filter((star) => star.sessionId === sessionId && !star.stale).map((star) => star.messageId)
+      this.store.stars
+        .filter(star => star.sessionId === sessionId && !star.stale)
+        .map(star => star.messageId)
     )
 
     const messages = this.store.messages
-      .filter((row) => row.sessionId === sessionId)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-      .map((message) => ({
+      .filter(row => row.sessionId === sessionId)
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      )
+      .map(message => ({
         ...message,
         userStarred: starredMessageIds.has(message.id)
       }))
@@ -345,7 +402,9 @@ export class SessionStorage {
   }
 
   listStarredMessages(query: string): StarredMessageSummary[] {
-    const sessionsById = new Map(this.store.sessions.map((session) => [session.id, session]))
+    const sessionsById = new Map(
+      this.store.sessions.map(session => [session.id, session])
+    )
     const messagesBySession = new Map<string, SessionMessage[]>()
     for (const message of this.store.messages) {
       const entries = messagesBySession.get(message.sessionId) ?? []
@@ -354,12 +413,16 @@ export class SessionStorage {
     }
 
     const rows: StarredMessageSummary[] = []
-    for (const star of this.store.stars.map((entry) => normalizeStarRecord(entry))) {
+    for (const star of this.store.stars.map(entry =>
+      normalizeStarRecord(entry)
+    )) {
       const session = sessionsById.get(star.sessionId)
       if (!session) {
         continue
       }
-      const liveMessage = (messagesBySession.get(star.sessionId) ?? []).find((message) => message.id === star.messageId)
+      const liveMessage = (messagesBySession.get(star.sessionId) ?? []).find(
+        message => message.id === star.messageId
+      )
       rows.push({
         sessionId: star.sessionId,
         messageId: star.messageId,
@@ -376,20 +439,33 @@ export class SessionStorage {
 
     const trimmed = query.trim().toLowerCase()
     const filtered = trimmed
-      ? rows.filter((row) =>
-          [row.messageId, row.sessionTitle, row.repoPath, row.role, row.content, row.sessionSource]
+      ? rows.filter(row =>
+          [
+            row.messageId,
+            row.sessionTitle,
+            row.repoPath,
+            row.role,
+            row.content,
+            row.sessionSource
+          ]
             .join('\n')
             .toLowerCase()
             .includes(trimmed)
         )
       : rows
-    return filtered.sort((a, b) => new Date(b.starredAt).getTime() - new Date(a.starredAt).getTime())
+    return filtered.sort(
+      (a, b) =>
+        new Date(b.starredAt).getTime() - new Date(a.starredAt).getTime()
+    )
   }
 
   setArchived(sessionId: string, archived: boolean): SessionSummary | null {
-    const index = this.store.sessions.findIndex((row) => row.id === sessionId)
+    const index = this.store.sessions.findIndex(row => row.id === sessionId)
     if (index === -1) {
-      logWarn('Cannot set archive state: session not found', { sessionId, archived })
+      logWarn('Cannot set archive state: session not found', {
+        sessionId,
+        archived
+      })
       return null
     }
 
@@ -405,16 +481,28 @@ export class SessionStorage {
     return next
   }
 
-  setMessageStarred(sessionId: string, messageId: string, starred: boolean): MessageStarRecord | null {
-    const session = this.store.sessions.find((row) => row.id === sessionId)
+  setMessageStarred(
+    sessionId: string,
+    messageId: string,
+    starred: boolean
+  ): MessageStarRecord | null {
+    const session = this.store.sessions.find(row => row.id === sessionId)
     if (!session) {
-      logWarn('Cannot update message star state: session not found', { sessionId, messageId, starred })
+      logWarn('Cannot update message star state: session not found', {
+        sessionId,
+        messageId,
+        starred
+      })
       return null
     }
 
-    const index = this.store.stars.findIndex((entry) => entry.sessionId === sessionId && entry.messageId === messageId)
+    const index = this.store.stars.findIndex(
+      entry => entry.sessionId === sessionId && entry.messageId === messageId
+    )
     const now = new Date().toISOString()
-    const liveMessage = this.store.messages.find((message) => message.sessionId === sessionId && message.id === messageId)
+    const liveMessage = this.store.messages.find(
+      message => message.sessionId === sessionId && message.id === messageId
+    )
 
     if (!starred) {
       if (index === -1) {
@@ -427,7 +515,10 @@ export class SessionStorage {
     }
 
     if (!liveMessage && index === -1) {
-      logWarn('Cannot star message: message not found', { sessionId, messageId })
+      logWarn('Cannot star message: message not found', {
+        sessionId,
+        messageId
+      })
       return null
     }
 
@@ -437,9 +528,16 @@ export class SessionStorage {
       createdAt: index >= 0 ? this.store.stars[index]!.createdAt : now,
       updatedAt: now,
       stale: !liveMessage,
-      lastKnownRole: liveMessage?.role ?? this.store.stars[index]?.lastKnownRole ?? 'assistant',
-      lastKnownContent: liveMessage?.content ?? this.store.stars[index]?.lastKnownContent ?? '',
-      lastKnownTimestamp: liveMessage?.timestamp ?? this.store.stars[index]?.lastKnownTimestamp ?? now
+      lastKnownRole:
+        liveMessage?.role ??
+        this.store.stars[index]?.lastKnownRole ??
+        'assistant',
+      lastKnownContent:
+        liveMessage?.content ?? this.store.stars[index]?.lastKnownContent ?? '',
+      lastKnownTimestamp:
+        liveMessage?.timestamp ??
+        this.store.stars[index]?.lastKnownTimestamp ??
+        now
     })
 
     if (index >= 0) {

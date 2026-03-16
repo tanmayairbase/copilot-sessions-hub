@@ -1,7 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react'
-import type { SessionSource, SessionSummary, StarredMessageSummary } from '@shared/types'
+import type {
+  SessionSource,
+  SessionSummary,
+  StarredMessageSummary
+} from '@shared/types'
 import type { DateFilterPreset } from '@shared/format'
-import { formatSessionOrigin, formatTimestampIST, toSearchPreview, toTildePath } from '@shared/format'
+import {
+  formatSessionOrigin,
+  formatTimestampIST,
+  toSearchPreview,
+  toTildePath
+} from '@shared/format'
 
 type DateFilterValue = DateFilterPreset | ''
 type OriginFilterValue = SessionSource
@@ -74,19 +83,23 @@ const MultiSelectFilter = ({
         {selected.length > 0 ? `${selected.length} selected` : 'All'}
       </button>
       {isOpen && (
-        <div className="filter-dropdown-menu" role="listbox" aria-multiselectable="true">
-        {options.length === 0 && <p className="filter-empty">{emptyLabel}</p>}
-        {options.map((option) => (
-          <label key={option} className="filter-option">
-            <input
-              type="checkbox"
-              checked={selected.includes(option)}
-              onChange={() => onToggle(option)}
-              aria-label={`${label}: ${option}`}
-            />
-            <span>{formatOption ? formatOption(option) : option}</span>
-          </label>
-        ))}
+        <div
+          className="filter-dropdown-menu"
+          role="listbox"
+          aria-multiselectable="true"
+        >
+          {options.length === 0 && <p className="filter-empty">{emptyLabel}</p>}
+          {options.map(option => (
+            <label key={option} className="filter-option">
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                onChange={() => onToggle(option)}
+                aria-label={`${label}: ${option}`}
+              />
+              <span>{formatOption ? formatOption(option) : option}</span>
+            </label>
+          ))}
         </div>
       )}
     </div>
@@ -166,10 +179,10 @@ export const SessionListSidebar = ({
   }, [query])
 
   const toggleMenu = (menu: Exclude<FilterMenu, null>): void => {
-    setOpenMenu((current) => (current === menu ? null : menu))
+    setOpenMenu(current => (current === menu ? null : menu))
   }
   const toggleFilters = (): void => {
-    setFiltersExpanded((current) => {
+    setFiltersExpanded(current => {
       if (current) {
         setOpenMenu(null)
       }
@@ -180,18 +193,26 @@ export const SessionListSidebar = ({
     onClearFilters()
     setOpenMenu(null)
   }
-  const showArchivedSection = query.trim().length > 0 && archivedFilter === 'hide' && archivedSearchMatches.length > 0
+  const showArchivedSection =
+    query.trim().length > 0 &&
+    archivedFilter === 'hide' &&
+    archivedSearchMatches.length > 0
 
-  const renderSessionRow = (session: SessionSummary, options?: { forceArchivedStyle?: boolean }) => {
+  const renderSessionRow = (
+    session: SessionSummary,
+    options?: { forceArchivedStyle?: boolean }
+  ) => {
     const isActive = session.id === selectedId
-    const isArchived = Boolean(session.userArchived || options?.forceArchivedStyle)
+    const isArchived = Boolean(
+      session.userArchived || options?.forceArchivedStyle
+    )
 
     return (
       <button
         key={session.id}
         className={`session-item ${isActive ? 'active' : ''} ${isArchived ? 'archived' : ''}`}
         onClick={() => onSelect(session.id)}
-        onContextMenu={(event) => {
+        onContextMenu={event => {
           event.preventDefault()
           setContextMenu({
             sessionId: session.id,
@@ -202,9 +223,13 @@ export const SessionListSidebar = ({
         }}
         type="button"
       >
-        <div className="session-title">{toSearchPreview(session.title, 72)}</div>
+        <div className="session-title">
+          {toSearchPreview(session.title, 72)}
+        </div>
         <div className="session-meta">
-          {(session.userArchived || session.missingFromLastSync) && <span className="session-archived-badge">Archived</span>}
+          {(session.userArchived || session.missingFromLastSync) && (
+            <span className="session-archived-badge">Archived</span>
+          )}
           <span>{formatSessionOrigin(session.source)}</span>
           <span>{formatTimestampIST(session.updatedAt)}</span>
         </div>
@@ -221,7 +246,7 @@ export const SessionListSidebar = ({
             aria-label="Search sessions"
             className="sidebar-search"
             value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
+            onChange={event => onQueryChange(event.target.value)}
             placeholder="Search messages, title, repo, model"
           />
           {query.trim().length > 0 && (
@@ -239,12 +264,19 @@ export const SessionListSidebar = ({
         </div>
 
         <div className="filters-toolbar">
-          <button type="button" className="filters-toggle" aria-expanded={filtersExpanded} onClick={toggleFilters}>
+          <button
+            type="button"
+            className="filters-toggle"
+            aria-expanded={filtersExpanded}
+            onClick={toggleFilters}
+          >
             <span className="filters-toggle-icon-wrap">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M4 6h16l-6 7v5l-4 2v-7z" />
               </svg>
-              {hasActiveFilters && <span className="filters-active-dot" aria-hidden="true" />}
+              {hasActiveFilters && (
+                <span className="filters-active-dot" aria-hidden="true" />
+              )}
             </span>
             <span>Filters</span>
           </button>
@@ -287,8 +319,10 @@ export const SessionListSidebar = ({
               label="Origin"
               options={originOptions}
               selected={selectedOrigins}
-              onToggle={(value) => onToggleOrigin(value as OriginFilterValue)}
-              formatOption={(origin) => formatSessionOrigin(origin as OriginFilterValue)}
+              onToggle={value => onToggleOrigin(value as OriginFilterValue)}
+              formatOption={origin =>
+                formatSessionOrigin(origin as OriginFilterValue)
+              }
               emptyLabel="No origins available"
               isOpen={openMenu === 'origin'}
               onOpen={toggleMenu}
@@ -298,7 +332,9 @@ export const SessionListSidebar = ({
               <select
                 className="filter-select"
                 value={dateFilter}
-                onChange={(event) => onDateFilterChange(event.target.value as DateFilterValue)}
+                onChange={event =>
+                  onDateFilterChange(event.target.value as DateFilterValue)
+                }
                 aria-label="Date filter"
               >
                 <option value="">All</option>
@@ -313,7 +349,11 @@ export const SessionListSidebar = ({
               <select
                 className="filter-select"
                 value={archivedFilter}
-                onChange={(event) => onArchivedFilterChange(event.target.value as ArchivedFilterValue)}
+                onChange={event =>
+                  onArchivedFilterChange(
+                    event.target.value as ArchivedFilterValue
+                  )
+                }
                 aria-label="Archived filter"
               >
                 <option value="hide">Hide archived</option>
@@ -326,7 +366,11 @@ export const SessionListSidebar = ({
               <select
                 className="filter-select"
                 value={starredFilter}
-                onChange={(event) => onStarredFilterChange(event.target.value as StarredFilterValue)}
+                onChange={event =>
+                  onStarredFilterChange(
+                    event.target.value as StarredFilterValue
+                  )
+                }
                 aria-label="Starred filter"
               >
                 <option value="all">All sessions</option>
@@ -348,25 +392,33 @@ export const SessionListSidebar = ({
               type="button"
               className="starred-toggle"
               aria-expanded={starredExpanded}
-              onClick={() => setStarredExpanded((value) => !value)}
+              onClick={() => setStarredExpanded(value => !value)}
             >
               <span>Starred ({starredMessages.length})</span>
               <span>{starredExpanded ? '▾' : '▸'}</span>
             </button>
             {starredExpanded && (
               <div className="starred-list">
-                {starredMessages.map((star) => (
+                {starredMessages.map(star => (
                   <button
                     key={`${star.sessionId}:${star.messageId}`}
                     type="button"
                     className={`starred-item ${star.stale ? 'stale' : ''}`}
-                    onClick={() => onSelectStarredMessage(star.sessionId, star.messageId)}
+                    onClick={() =>
+                      onSelectStarredMessage(star.sessionId, star.messageId)
+                    }
                   >
                     <div className="starred-item-top">
-                      <span className="starred-item-role">{star.role === 'user' ? 'You' : 'Copilot'}</span>
-                      {star.stale && <span className="starred-item-stale">Stale</span>}
+                      <span className="starred-item-role">
+                        {star.role === 'user' ? 'You' : 'Copilot'}
+                      </span>
+                      {star.stale && (
+                        <span className="starred-item-stale">Stale</span>
+                      )}
                     </div>
-                    <div className="starred-item-content">{toSearchPreview(star.content, 92)}</div>
+                    <div className="starred-item-content">
+                      {toSearchPreview(star.content, 92)}
+                    </div>
                     <div className="starred-item-meta">
                       <span>{toSearchPreview(star.sessionTitle, 48)}</span>
                       <span>{formatTimestampIST(star.timestamp)}</span>
@@ -377,25 +429,34 @@ export const SessionListSidebar = ({
             )}
           </section>
         )}
-        {sessions.map((session) => renderSessionRow(session))}
+        {sessions.map(session => renderSessionRow(session))}
         {showArchivedSection && (
-          <section className="archived-search-section" aria-label="Archived search matches">
+          <section
+            className="archived-search-section"
+            aria-label="Archived search matches"
+          >
             <button
               type="button"
               className="archived-search-toggle"
               aria-expanded={archivedExpanded}
-              onClick={() => setArchivedExpanded((value) => !value)}
+              onClick={() => setArchivedExpanded(value => !value)}
             >
               <span>Archived matches ({archivedSearchMatches.length})</span>
               <span>{archivedExpanded ? '▾' : '▸'}</span>
             </button>
             {archivedExpanded && (
-              <div className="archived-search-list">{archivedSearchMatches.map((session) => renderSessionRow(session, { forceArchivedStyle: true }))}</div>
+              <div className="archived-search-list">
+                {archivedSearchMatches.map(session =>
+                  renderSessionRow(session, { forceArchivedStyle: true })
+                )}
+              </div>
             )}
           </section>
         )}
         {sessions.length === 0 && !showArchivedSection && (
-          <p className="empty-list">No sessions found. Try syncing or changing search.</p>
+          <p className="empty-list">
+            No sessions found. Try syncing or changing search.
+          </p>
         )}
       </div>
       {contextMenu && (
@@ -419,7 +480,9 @@ export const SessionListSidebar = ({
               <path d="M4 4h16v4H4z" />
               <path d="M5 9h14v11H5z" />
             </svg>
-            <span>{contextMenu.archived ? 'Unarchive session' : 'Archive session'}</span>
+            <span>
+              {contextMenu.archived ? 'Unarchive session' : 'Archive session'}
+            </span>
           </button>
         </div>
       )}

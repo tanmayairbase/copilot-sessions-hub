@@ -16,7 +16,7 @@ export const formatTimestampIST = (isoLike: string): string => {
     hour12: false
   }).formatToParts(date)
 
-  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  const map = Object.fromEntries(parts.map(part => [part.type, part.value]))
   return `${map.month} ${map.day}, ${map.year} ${map.hour}:${map.minute} IST`
 }
 
@@ -36,7 +36,7 @@ export const formatMinuteKeyIST = (isoLike: string): string => {
     hour12: false
   }).formatToParts(date)
 
-  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  const map = Object.fromEntries(parts.map(part => [part.type, part.value]))
   return `${map.year}-${map.month}-${map.day} ${map.hour}:${map.minute}`
 }
 
@@ -45,9 +45,14 @@ export type DateFilterPreset = 'today' | 'yesterday' | 'last7' | 'last30'
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
 
-const istDayIndex = (value: Date): number => Math.floor((value.getTime() + IST_OFFSET_MS) / MS_PER_DAY)
+const istDayIndex = (value: Date): number =>
+  Math.floor((value.getTime() + IST_OFFSET_MS) / MS_PER_DAY)
 
-export const matchesIstDatePreset = (isoLike: string, preset: DateFilterPreset, now: Date = new Date()): boolean => {
+export const matchesIstDatePreset = (
+  isoLike: string,
+  preset: DateFilterPreset,
+  now: Date = new Date()
+): boolean => {
   const date = new Date(isoLike)
   if (Number.isNaN(date.getTime())) {
     return false
@@ -88,7 +93,9 @@ export const toSearchPreview = (value: string, maxLength = 120): string => {
   return `${value.slice(0, maxLength - 1)}…`
 }
 
-export const normalizeModelLabel = (value: string | null | undefined): string => {
+export const normalizeModelLabel = (
+  value: string | null | undefined
+): string => {
   const trimmed = (value ?? '').trim()
   if (!trimmed) {
     return ''
@@ -106,7 +113,10 @@ export const formatSessionOrigin = (origin: SessionSource): string => {
   return 'CLI'
 }
 
-export const matchesRepositoryFilter = (sessionRepoPath: string, selectedRepoPaths: string[]): boolean => {
+export const matchesRepositoryFilter = (
+  sessionRepoPath: string,
+  selectedRepoPaths: string[]
+): boolean => {
   if (selectedRepoPaths.length === 0) {
     return true
   }
