@@ -7,6 +7,7 @@ interface ParseContext {
   filePath: string
   repoRoot: string
   source: SessionSource
+  cliSummaryBySessionId?: ReadonlyMap<string, string>
 }
 
 export interface ParsedSession {
@@ -741,6 +742,22 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
   const detectedSource: SessionSource =
     sourceHint ?? (versionSource as SessionSource | null) ?? inferSource(context.filePath, context.source)
 
+  const titleFromEvents = [...lines]
+    .reverse()
+    .map((line) => {
+      if (line.type === 'session.title_changed') {
+        return firstString(line.data?.['title'])
+      }
+      if (line.type === 'session.task_complete') {
+        return firstString(line.data?.['summary'])
+      }
+      if (line.type === 'session.compaction_complete') {
+        return firstString(line.data?.['summaryContent'])
+      }
+      return null
+    })
+    .find((value): value is string => Boolean(value?.trim()))
+
   const messages: SessionMessage[] = []
   let messageIndex = 0
   for (const line of lines) {
@@ -792,6 +809,10 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
     .find((value): value is string => Boolean(value))
 
   const titleSeed = messages.find((message) => message.role === 'user')?.content ?? messages[0].content
+  const cliSummaryTitle =
+    detectedSource === 'cli' ? firstString(context.cliSummaryBySessionId?.get(sessionId)) : null
+  const preferredTitle = firstString(cliSummaryTitle, titleFromEvents)
+  const normalizedPreferredTitle = preferredTitle?.replace(/\s+/g, ' ').trim() ?? ''
   const createdAt =
     new Date(firstString(sessionStart?.data?.['startTime'], messages[0]?.timestamp) ?? Date.now()).toISOString()
   const updatedAt = new Date(messages[messages.length - 1]?.timestamp ?? Date.now()).toISOString()
@@ -800,7 +821,7 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
     id: sessionId,
     source: detectedSource,
     repoPath,
-    title: titleSeed.slice(0, 120),
+    title: normalizedPreferredTitle ? normalizedPreferredTitle.slice(0, 120) : titleSeed.slice(0, 120),
     model: firstString(
       lastToolModel,
       sessionStart?.data?.['model'],

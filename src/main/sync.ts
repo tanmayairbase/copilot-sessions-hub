@@ -38,6 +38,7 @@ const globalVsCodeChatPattern = join(
   'chatSessions',
   '*.jsonl'
 )
+const COPILOT_SESSION_STORE_DB_PATH = join(homedir(), '.copilot', 'session-store.db')
 
 const workspaceRepoCache = new Map<string, string | null>()
 
@@ -98,13 +99,66 @@ const buildSearchPatterns = (config: AppConfig): string[] => {
   return unique([...autodiscoveryPatterns, ...config.explicitPatterns])
 }
 
+interface CliSessionSummaryRow {
+  id: string
+  summary: string
+}
+
+const loadCliSessionSummaryMap = async (): Promise<Map<string, string>> => {
+  const summaries = new Map<string, string>()
+  if (!(await fs.stat(COPILOT_SESSION_STORE_DB_PATH).then(() => true).catch(() => false))) {
+    return summaries
+  }
+
+  let DatabaseSyncClass: typeof import('node:sqlite').DatabaseSync
+  try {
+    const sqliteModule = await import('node:sqlite')
+    DatabaseSyncClass = sqliteModule.DatabaseSync
+  } catch (error) {
+    logWarn('CLI summary lookup skipped: node:sqlite unavailable', {
+      reason: (error as Error).message
+    })
+    return summaries
+  }
+
+  const database = new DatabaseSyncClass(COPILOT_SESSION_STORE_DB_PATH)
+  try {
+    const rows = database
+      .prepare(
+        `SELECT id, summary
+         FROM sessions
+         WHERE summary IS NOT NULL
+           AND TRIM(summary) != ''`
+      )
+      .all() as unknown as CliSessionSummaryRow[]
+    for (const row of rows) {
+      const cleaned = row.summary.replace(/\s+/g, ' ').trim()
+      if (cleaned) {
+        summaries.set(row.id, cleaned)
+      }
+    }
+    logInfo('Loaded CLI session summaries', { count: summaries.size })
+  } catch (error) {
+    logWarn('Failed loading CLI session summaries', {
+      dbPath: COPILOT_SESSION_STORE_DB_PATH,
+      reason: (error as Error).message
+    })
+  } finally {
+    database.close()
+  }
+
+  return summaries
+}
+
 export const syncSessions = async (config: AppConfig, storage: SessionStorage): Promise<SyncResult> => {
   const repoRoots = unique(config.repoRoots.map(expandHome).map((value) => resolve(value)))
   const patterns = buildSearchPatterns(config)
+  const cliSummaryBySessionId = await loadCliSessionSummaryMap()
   logInfo('Starting sync', {
     repoRoots: repoRoots.length,
     discoveryMode: config.discoveryMode,
-    patterns: patterns.length
+    patterns: patterns.length,
+    cliSummaries: cliSummaryBySessionId.size
   })
 
   const result: SyncResult = {
@@ -201,7 +255,8 @@ export const syncSessions = async (config: AppConfig, storage: SessionStorage): 
         filePath,
         repoRoot,
         source:
-          filePath.toLowerCase().includes('chatsessions') || filePath.toLowerCase().includes('vscode') ? 'vscode' : 'cli'
+          filePath.toLowerCase().includes('chatsessions') || filePath.toLowerCase().includes('vscode') ? 'vscode' : 'cli',
+        cliSummaryBySessionId
       })
       logInfo('Parsed session artifact file', { filePath, sessionsFound: parsed.length })
 

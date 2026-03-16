@@ -128,6 +128,45 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].session.source).toBe('cli')
   })
 
+  it('uses CLI summary hints for events session title', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-events-cli-title',
+          copilotVersion: '1.0.4',
+          startTime: '2026-03-10T10:00:00.000Z',
+          context: { cwd: '/tmp/repo-events' }
+        },
+        timestamp: '2026-03-10T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: {
+          content:
+            'I have a very long request that should not be used as the list title when a concise CLI summary exists.'
+        },
+        timestamp: '2026-03-10T10:01:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Done.' },
+        timestamp: '2026-03-10T10:01:01.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath: '/Users/me/.copilot/session-state/session-events-cli-title/events.jsonl',
+      repoRoot: '/tmp/repo-events',
+      source: 'cli',
+      cliSummaryBySessionId: new Map([['session-events-cli-title', 'Fix Sidebar Filter Layout']])
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].session.source).toBe('cli')
+    expect(parsed[0].session.title).toBe('Fix Sidebar Filter Layout')
+  })
+
   it('honors opencode source hint in generic payload', () => {
     const raw = JSON.stringify({
       id: 'open-session-1',
