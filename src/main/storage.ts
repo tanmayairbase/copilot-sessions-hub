@@ -21,6 +21,7 @@ interface PersistedStore {
 }
 
 const emptyStore = (): PersistedStore => ({ sessions: [], messages: [] })
+const ARCHIVE_PRUNE_MONTHS = 4
 
 const normalize = (value: string): string => value.toLowerCase()
 const ensureIso = (value: string | undefined, fallback: string): string => {
@@ -38,6 +39,10 @@ const normalizeSessionSummary = (session: SessionSummary): SessionSummary => {
   const updatedAt = ensureIso(session.updatedAt, createdAt)
   const firstSeenAt = ensureIso(session.firstSeenAt, createdAt)
   const lastSeenAt = ensureIso(session.lastSeenAt, updatedAt)
+  const userArchived = Boolean(session.userArchived)
+  const userArchivedAt = userArchived
+    ? ensureIso(session.userArchivedAt, updatedAt)
+    : undefined
 
   return {
     ...session,
@@ -45,8 +50,16 @@ const normalizeSessionSummary = (session: SessionSummary): SessionSummary => {
     updatedAt,
     firstSeenAt,
     lastSeenAt,
-    missingFromLastSync: Boolean(session.missingFromLastSync)
+    missingFromLastSync: Boolean(session.missingFromLastSync),
+    userArchived,
+    userArchivedAt
   }
+}
+
+const subtractMonthsUtc = (value: string, months: number): Date => {
+  const date = new Date(value)
+  date.setUTCMonth(date.getUTCMonth() - months)
+  return date
 }
 
 export class SessionStorage {
@@ -134,11 +147,20 @@ export class SessionStorage {
         newSessions += 1
       }
 
+      const upstreamChanged = existing
+        ? new Date(normalizedIncoming.updatedAt).getTime() > new Date(existing.updatedAt).getTime() ||
+          normalizedIncoming.messageCount !== existing.messageCount
+        : true
+      const preserveManualArchive = Boolean(existing?.userArchived && !upstreamChanged)
+      const archiveTimestamp = preserveManualArchive ? existing?.userArchivedAt : undefined
+
       nextSessionsById.set(normalizedIncoming.id, {
         ...normalizedIncoming,
         firstSeenAt: existing?.firstSeenAt ?? normalizedIncoming.firstSeenAt ?? syncedAt,
         lastSeenAt: syncedAt,
-        missingFromLastSync: false
+        missingFromLastSync: false,
+        userArchived: preserveManualArchive,
+        userArchivedAt: archiveTimestamp
       })
       nextMessagesBySession.set(normalizedIncoming.id, row.messages)
     }
@@ -151,6 +173,21 @@ export class SessionStorage {
         ...normalizeSessionSummary(session),
         missingFromLastSync: true
       })
+    }
+
+    const pruneCutoff = subtractMonthsUtc(syncedAt, ARCHIVE_PRUNE_MONTHS).getTime()
+    let prunedArchivedSessions = 0
+    for (const [sessionId, session] of nextSessionsById.entries()) {
+      if (!session.userArchived) {
+        continue
+      }
+      const archivedAt = ensureIso(session.userArchivedAt, session.updatedAt)
+      if (new Date(archivedAt).getTime() >= pruneCutoff) {
+        continue
+      }
+      nextSessionsById.delete(sessionId)
+      nextMessagesBySession.delete(sessionId)
+      prunedArchivedSessions += 1
     }
 
     this.store.sessions = [...nextSessionsById.values()]
@@ -169,6 +206,7 @@ export class SessionStorage {
       newSessions: result.newSessions,
       updatedSessions: result.updatedSessions,
       archivedSessions: result.archivedSessions,
+      prunedArchivedSessions,
       totalSessions: result.totalSessions
     })
     return result
@@ -223,5 +261,24 @@ export class SessionStorage {
 
     logInfo('Loaded session detail', { sessionId, messages: messages.length })
     return { ...session, messages }
+  }
+
+  setArchived(sessionId: string, archived: boolean): SessionSummary | null {
+    const index = this.store.sessions.findIndex((row) => row.id === sessionId)
+    if (index === -1) {
+      logWarn('Cannot set archive state: session not found', { sessionId, archived })
+      return null
+    }
+
+    const current = normalizeSessionSummary(this.store.sessions[index]!)
+    const next = normalizeSessionSummary({
+      ...current,
+      userArchived: archived,
+      userArchivedAt: archived ? new Date().toISOString() : undefined
+    })
+    this.store.sessions[index] = next
+    this.persist()
+    logInfo('Updated session archive state', { sessionId, archived })
+    return next
   }
 }

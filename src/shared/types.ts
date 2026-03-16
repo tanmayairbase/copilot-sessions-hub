@@ -23,6 +23,8 @@ export interface SessionSummary {
   firstSeenAt?: string
   lastSeenAt?: string
   missingFromLastSync?: boolean
+  userArchived?: boolean
+  userArchivedAt?: string
 }
 
 export interface SessionMessage {
@@ -65,4 +67,5 @@ export interface RendererApi {
   listSessions: (query: string) => Promise<SessionSummary[]>
   getSessionDetail: (sessionId: string) => Promise<SessionDetail | null>
   openSessionInTool: (sessionId: string, tool: 'vscode' | 'cli') => Promise<{ ok: boolean; message: string }>
+  setSessionArchived: (sessionId: string, archived: boolean) => Promise<SessionSummary | null>
 }

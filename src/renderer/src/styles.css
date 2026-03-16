@@ -228,6 +228,8 @@ button:hover {
   border-radius: 8px;
   background: #111827;
   padding: 6px 8px;
+  font-size: 12px;
+  color: #c9d1d9;
   min-height: 32px;
 }
 
@@ -283,6 +285,16 @@ button:hover {
   background: #13213b;
 }
 
+.session-item.archived {
+  background: #1a1f27;
+  border-color: #2b313d;
+}
+
+.session-item.archived .session-title,
+.session-item.archived .session-path {
+  color: #9ca3af;
+}
+
 .session-title {
   font-weight: 600;
   word-break: break-all;
@@ -318,6 +330,66 @@ button:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.archived-search-section {
+  margin-top: 2px;
+  border: 1px solid #2b313d;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.archived-search-toggle {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #141923;
+  color: #c9d1d9;
+  padding: 8px 10px;
+}
+
+.archived-search-list {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: #11151d;
+}
+
+.session-context-menu {
+  position: fixed;
+  z-index: 6;
+  min-width: 184px;
+  background: #0f1722;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+}
+
+.session-context-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #d1d5db;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.session-context-item:hover {
+  background: #1f2937;
+}
+
+.session-context-item svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 .empty-list {

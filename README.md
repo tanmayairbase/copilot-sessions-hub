@@ -10,6 +10,10 @@ Desktop Electron app (TypeScript + Node 24) that aggregates Copilot sessions fro
 - Search sessions by metadata and message text.
 - Sidebar filters for repository/model/origin (multi-select) and IST date windows.
 - Sessions not found in the latest sync are marked with an **Archived** badge.
+- Local-only session archiving from the sidebar context menu (does not modify Copilot/VS Code/OpenCode data).
+- Archived sessions are hidden by default, can be shown via an Archived filter, and appear in a collapsed archived-search section when search matches exist.
+- Manually archived sessions auto-unarchive if upstream session activity changes on a later sync.
+- During sync, manually archived sessions older than four months are pruned from local storage.
 - Resizable sidebar list and detail pane chat UI.
 - **Read-only** session detail transcript (no in-app chatting/editing).
 - Session metadata with model + timestamp formatting as `MMM DD, YYYY HH:mm IST`.

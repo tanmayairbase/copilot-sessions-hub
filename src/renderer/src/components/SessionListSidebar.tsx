@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { SessionSource, SessionSummary } from '@shared/types'
 import type { DateFilterPreset } from '@shared/format'
 import { formatSessionOrigin, formatTimestampIST, toSearchPreview, toTildePath } from '@shared/format'
@@ -6,11 +6,14 @@ import { formatSessionOrigin, formatTimestampIST, toSearchPreview, toTildePath }
 type DateFilterValue = DateFilterPreset | ''
 type OriginFilterValue = SessionSource
 type FilterMenu = 'repository' | 'model' | 'origin' | null
+export type ArchivedFilterValue = 'hide' | 'show' | 'only'
 
 interface Props {
   sessions: SessionSummary[]
+  archivedSearchMatches: SessionSummary[]
   selectedId: string | null
   onSelect: (id: string) => void
+  onSetArchived: (sessionId: string, archived: boolean) => void
   query: string
   onQueryChange: (query: string) => void
   onClearFilters: () => void
@@ -25,6 +28,8 @@ interface Props {
   onToggleOrigin: (origin: OriginFilterValue) => void
   dateFilter: DateFilterValue
   onDateFilterChange: (value: DateFilterValue) => void
+  archivedFilter: ArchivedFilterValue
+  onArchivedFilterChange: (value: ArchivedFilterValue) => void
   hasActiveFilters: boolean
 }
 
@@ -85,8 +90,10 @@ const MultiSelectFilter = ({
 
 export const SessionListSidebar = ({
   sessions,
+  archivedSearchMatches,
   selectedId,
   onSelect,
+  onSetArchived,
   query,
   onQueryChange,
   onClearFilters,
@@ -101,11 +108,21 @@ export const SessionListSidebar = ({
   onToggleOrigin,
   dateFilter,
   onDateFilterChange,
+  archivedFilter,
+  onArchivedFilterChange,
   hasActiveFilters
 }: Props) => {
   const filterRootRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const [openMenu, setOpenMenu] = useState<FilterMenu>(null)
   const [filtersExpanded, setFiltersExpanded] = useState(false)
+  const [archivedExpanded, setArchivedExpanded] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{
+    sessionId: string
+    x: number
+    y: number
+    archived: boolean
+  } | null>(null)
 
   useEffect(() => {
     const onMouseDown = (event: MouseEvent): void => {
@@ -113,10 +130,15 @@ export const SessionListSidebar = ({
         return
       }
       setOpenMenu(null)
+      if (menuRef.current?.contains(event.target as Node)) {
+        return
+      }
+      setContextMenu(null)
     }
     const onEscape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         setOpenMenu(null)
+        setContextMenu(null)
       }
     }
 
@@ -127,6 +149,10 @@ export const SessionListSidebar = ({
       window.removeEventListener('keydown', onEscape)
     }
   }, [])
+
+  useEffect(() => {
+    setArchivedExpanded(false)
+  }, [query])
 
   const toggleMenu = (menu: Exclude<FilterMenu, null>): void => {
     setOpenMenu((current) => (current === menu ? null : menu))
@@ -142,6 +168,38 @@ export const SessionListSidebar = ({
   const clearFilters = (): void => {
     onClearFilters()
     setOpenMenu(null)
+  }
+  const showArchivedSection = query.trim().length > 0 && archivedFilter === 'hide' && archivedSearchMatches.length > 0
+
+  const renderSessionRow = (session: SessionSummary, options?: { forceArchivedStyle?: boolean }) => {
+    const isActive = session.id === selectedId
+    const isArchived = Boolean(session.userArchived || options?.forceArchivedStyle)
+
+    return (
+      <button
+        key={session.id}
+        className={`session-item ${isActive ? 'active' : ''} ${isArchived ? 'archived' : ''}`}
+        onClick={() => onSelect(session.id)}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          setContextMenu({
+            sessionId: session.id,
+            x: event.clientX,
+            y: event.clientY,
+            archived: Boolean(session.userArchived)
+          })
+        }}
+        type="button"
+      >
+        <div className="session-title">{toSearchPreview(session.title, 72)}</div>
+        <div className="session-meta">
+          {(session.userArchived || session.missingFromLastSync) && <span className="session-archived-badge">Archived</span>}
+          <span>{formatSessionOrigin(session.source)}</span>
+          <span>{formatTimestampIST(session.updatedAt)}</span>
+        </div>
+        <div className="session-path">{toTildePath(session.repoPath)}</div>
+      </button>
+    )
   }
 
   return (
@@ -239,32 +297,70 @@ export const SessionListSidebar = ({
                 <option value="last30">Last 30 days</option>
               </select>
             </label>
+            <label className="filter-group">
+              <span className="filter-label">Archived</span>
+              <select
+                className="filter-select"
+                value={archivedFilter}
+                onChange={(event) => onArchivedFilterChange(event.target.value as ArchivedFilterValue)}
+                aria-label="Archived filter"
+              >
+                <option value="hide">Hide archived</option>
+                <option value="show">Show archived</option>
+                <option value="only">Only archived</option>
+              </select>
+            </label>
           </div>
         )}
       </div>
 
       <div className="session-list" role="listbox" aria-label="Session list">
-        {sessions.map((session) => {
-          const isActive = session.id === selectedId
-          return (
+        {sessions.map((session) => renderSessionRow(session))}
+        {showArchivedSection && (
+          <section className="archived-search-section" aria-label="Archived search matches">
             <button
-              key={session.id}
-              className={`session-item ${isActive ? 'active' : ''}`}
-              onClick={() => onSelect(session.id)}
               type="button"
+              className="archived-search-toggle"
+              aria-expanded={archivedExpanded}
+              onClick={() => setArchivedExpanded((value) => !value)}
             >
-              <div className="session-title">{toSearchPreview(session.title, 72)}</div>
-              <div className="session-meta">
-                {session.missingFromLastSync && <span className="session-archived-badge">Archived</span>}
-                <span>{formatSessionOrigin(session.source)}</span>
-                <span>{formatTimestampIST(session.updatedAt)}</span>
-              </div>
-              <div className="session-path">{toTildePath(session.repoPath)}</div>
+              <span>Archived matches ({archivedSearchMatches.length})</span>
+              <span>{archivedExpanded ? '▾' : '▸'}</span>
             </button>
-          )
-        })}
-        {sessions.length === 0 && <p className="empty-list">No sessions found. Try syncing or changing search.</p>}
+            {archivedExpanded && (
+              <div className="archived-search-list">{archivedSearchMatches.map((session) => renderSessionRow(session, { forceArchivedStyle: true }))}</div>
+            )}
+          </section>
+        )}
+        {sessions.length === 0 && !showArchivedSection && (
+          <p className="empty-list">No sessions found. Try syncing or changing search.</p>
+        )}
       </div>
+      {contextMenu && (
+        <div
+          ref={menuRef}
+          className="session-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+          aria-label="Session actions"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="session-context-item"
+            onClick={() => {
+              onSetArchived(contextMenu.sessionId, !contextMenu.archived)
+              setContextMenu(null)
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 4h16v4H4z" />
+              <path d="M5 9h14v11H5z" />
+            </svg>
+            <span>{contextMenu.archived ? 'Unarchive session' : 'Archive session'}</span>
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

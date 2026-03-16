@@ -49,6 +49,11 @@ export const registerIpcHandlers = (storage: SessionStorage, configService: Conf
     return storage.getSessionDetail(sessionId)
   })
 
+  ipcMain.handle('sessions:set-archived', async (_event, sessionId: string, archived: boolean) => {
+    logInfo('IPC sessions:set-archived', { sessionId, archived })
+    return storage.setArchived(sessionId, archived)
+  })
+
   ipcMain.handle('sessions:open-tool', async (_event, sessionId: string, tool: 'vscode' | 'cli') => {
     logInfo('IPC sessions:open-tool', { sessionId, tool })
     const detail = storage.getSessionDetail(sessionId)

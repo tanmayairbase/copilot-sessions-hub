@@ -8,7 +8,9 @@ const api: RendererApi = {
   syncSessions: async () => ipcRenderer.invoke('sessions:sync'),
   listSessions: async (query: string) => ipcRenderer.invoke('sessions:list', query),
   getSessionDetail: async (sessionId: string) => ipcRenderer.invoke('sessions:get', sessionId),
-  openSessionInTool: async (sessionId: string, tool: 'vscode' | 'cli') => ipcRenderer.invoke('sessions:open-tool', sessionId, tool)
+  openSessionInTool: async (sessionId: string, tool: 'vscode' | 'cli') => ipcRenderer.invoke('sessions:open-tool', sessionId, tool),
+  setSessionArchived: async (sessionId: string, archived: boolean) =>
+    ipcRenderer.invoke('sessions:set-archived', sessionId, archived)
 }
 
 contextBridge.exposeInMainWorld('copilotSessions', api)

@@ -3,7 +3,7 @@ import type { AppConfig, RendererApi, SessionDetail, SessionSource, SessionSumma
 import type { DateFilterPreset } from '@shared/format'
 import { matchesIstDatePreset, matchesRepositoryFilter } from '@shared/format'
 import { SessionDetailView } from './components/SessionDetailView'
-import { SessionListSidebar } from './components/SessionListSidebar'
+import { SessionListSidebar, type ArchivedFilterValue } from './components/SessionListSidebar'
 import { SettingsModal } from './components/SettingsModal'
 
 const SIDEBAR_WIDTH_KEY = 'copilot-sessions-sidebar-width'
@@ -45,6 +45,7 @@ export const App = () => {
   const [selectedModels, setSelectedModels] = useState<string[]>([])
   const [selectedOrigins, setSelectedOrigins] = useState<SessionSource[]>([])
   const [dateFilter, setDateFilter] = useState<DateFilterValue>('')
+  const [archivedFilter, setArchivedFilter] = useState<ArchivedFilterValue>('hide')
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const value = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY) ?? '360')
     const bounds = getSidebarBounds(window.innerWidth)
@@ -155,7 +156,7 @@ export const App = () => {
     }
   }, [])
 
-  const filteredSessions = useMemo(() => {
+  const baseFilteredSessions = useMemo(() => {
     return sessions.filter((session) => {
       if (!matchesRepositoryFilter(session.repoPath, selectedRepos)) {
         return false
@@ -173,11 +174,32 @@ export const App = () => {
     })
   }, [dateFilter, selectedModels, selectedOrigins, selectedRepos, sessions])
 
+  const archivedSearchMatches = useMemo(
+    () => baseFilteredSessions.filter((session) => Boolean(session.userArchived)),
+    [baseFilteredSessions]
+  )
+
+  const filteredSessions = useMemo(() => {
+    if (archivedFilter === 'show') {
+      return baseFilteredSessions
+    }
+    if (archivedFilter === 'only') {
+      return archivedSearchMatches
+    }
+    return baseFilteredSessions.filter((session) => !session.userArchived)
+  }, [archivedFilter, archivedSearchMatches, baseFilteredSessions])
+
   useEffect(() => {
+    const additionalSelectableIds =
+      searchQuery.trim().length > 0 && archivedFilter === 'hide'
+        ? new Set(archivedSearchMatches.map((session) => session.id))
+        : new Set<string>()
     setSelectedId((previous) =>
-      filteredSessions.some((session) => session.id === previous) ? previous : (filteredSessions[0]?.id ?? null)
+      filteredSessions.some((session) => session.id === previous) || (previous ? additionalSelectableIds.has(previous) : false)
+        ? previous
+        : (filteredSessions[0]?.id ?? null)
     )
-  }, [filteredSessions])
+  }, [archivedFilter, archivedSearchMatches, filteredSessions, searchQuery])
 
   const onToggleRepo = useCallback((repoPath: string): void => {
     setSelectedRepos((current) =>
@@ -201,7 +223,21 @@ export const App = () => {
     setSelectedModels([])
     setSelectedOrigins([])
     setDateFilter('')
+    setArchivedFilter('hide')
   }, [])
+
+  const onSetArchived = useCallback(
+    async (sessionId: string, archived: boolean): Promise<void> => {
+      try {
+        await ensureApi().setSessionArchived(sessionId, archived)
+        await refreshList(searchQuery)
+        setToast(archived ? 'Session archived.' : 'Session unarchived.')
+      } catch (error) {
+        setToast(`Failed to update archive state: ${(error as Error).message}`)
+      }
+    },
+    [ensureApi, refreshList, searchQuery]
+  )
 
   const onSync = async (): Promise<void> => {
     setIsSyncing(true)
@@ -304,7 +340,12 @@ export const App = () => {
     }
     return `${syncResult.errors.length} file errors captured during sync.`
   }, [syncResult])
-  const hasActiveFilters = selectedRepos.length > 0 || selectedModels.length > 0 || selectedOrigins.length > 0 || Boolean(dateFilter)
+  const hasActiveFilters =
+    selectedRepos.length > 0 ||
+    selectedModels.length > 0 ||
+    selectedOrigins.length > 0 ||
+    Boolean(dateFilter) ||
+    archivedFilter !== 'hide'
 
   return (
     <div className="app-root">
@@ -328,8 +369,10 @@ export const App = () => {
         <div className="sidebar-shell" style={{ width: `${sidebarWidth}px` }}>
           <SessionListSidebar
             sessions={filteredSessions}
+            archivedSearchMatches={archivedSearchMatches}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            onSetArchived={(sessionId, archived) => void onSetArchived(sessionId, archived)}
             query={searchQuery}
             onQueryChange={setSearchQuery}
             onClearFilters={onClearFilters}
@@ -344,6 +387,8 @@ export const App = () => {
             onToggleOrigin={onToggleOrigin}
             dateFilter={dateFilter}
             onDateFilterChange={setDateFilter}
+            archivedFilter={archivedFilter}
+            onArchivedFilterChange={setArchivedFilter}
             hasActiveFilters={hasActiveFilters}
           />
         </div>

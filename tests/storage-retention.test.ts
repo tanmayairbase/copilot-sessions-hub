@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import type { SessionInsert } from '../src/main/storage'
 import { SessionStorage } from '../src/main/storage'
+import type { SessionMessage, SessionSummary } from '../src/shared/types'
 
 const makeInsert = (id: string, updatedAt: string, userText: string, assistantText: string): SessionInsert => ({
   session: {
@@ -117,5 +118,82 @@ describe('SessionStorage archival retention', () => {
     const byPartialId = storage.list('beta-999')
     expect(byPartialId).toHaveLength(1)
     expect(byPartialId[0]?.id).toBe('session-beta-999')
+  })
+
+  it('persists local archive state without deleting messages', async () => {
+    const tempDir = await fs.mkdtemp(join(tmpdir(), 'copilot-storage-retention-'))
+    const storage = new SessionStorage(join(tempDir, 'sessions-store.json'))
+
+    storage.mergeFromSync(
+      [makeInsert('session-archive-1', '2026-03-03T00:00:00.000Z', 'ask', 'answer')],
+      '2026-03-03T02:00:00.000Z'
+    )
+
+    const archived = storage.setArchived('session-archive-1', true)
+    expect(archived?.userArchived).toBe(true)
+    expect(archived?.userArchivedAt).toBeTruthy()
+    expect(storage.getSessionDetail('session-archive-1')?.messages).toHaveLength(2)
+
+    const unarchived = storage.setArchived('session-archive-1', false)
+    expect(unarchived?.userArchived).toBe(false)
+    expect(unarchived?.userArchivedAt).toBeUndefined()
+  })
+
+  it('keeps manual archive when upstream does not change, then unarchives on newer upstream update', async () => {
+    const tempDir = await fs.mkdtemp(join(tmpdir(), 'copilot-storage-retention-'))
+    const storage = new SessionStorage(join(tempDir, 'sessions-store.json'))
+
+    storage.mergeFromSync(
+      [makeInsert('session-archive-2', '2026-03-03T00:00:00.000Z', 'ask', 'answer')],
+      '2026-03-03T02:00:00.000Z'
+    )
+    storage.setArchived('session-archive-2', true)
+
+    storage.mergeFromSync(
+      [makeInsert('session-archive-2', '2026-03-03T00:00:00.000Z', 'ask', 'answer')],
+      '2026-03-10T02:00:00.000Z'
+    )
+    expect(storage.list('').find((row) => row.id === 'session-archive-2')?.userArchived).toBe(true)
+
+    storage.mergeFromSync(
+      [makeInsert('session-archive-2', '2026-03-20T00:00:00.000Z', 'ask-new', 'answer-new')],
+      '2026-03-20T02:00:00.000Z'
+    )
+    expect(storage.list('').find((row) => row.id === 'session-archive-2')?.userArchived).toBe(false)
+  })
+
+  it('prunes manually archived sessions older than four months during sync', async () => {
+    const tempDir = await fs.mkdtemp(join(tmpdir(), 'copilot-storage-retention-'))
+    const storagePath = join(tempDir, 'sessions-store.json')
+    const summary: SessionSummary = {
+      id: 'session-prune-1',
+      source: 'cli',
+      repoPath: '/tmp/repo',
+      title: 'old archived',
+      model: 'gpt-5.3-codex',
+      createdAt: '2025-10-01T00:00:00.000Z',
+      updatedAt: '2025-10-01T00:00:00.000Z',
+      messageCount: 1,
+      filePath: '/tmp/repo/.copilot/session-prune-1.json',
+      openVscodeTarget: '/tmp/repo/.copilot/session-prune-1.json',
+      openCliCwd: '/tmp/repo',
+      userArchived: true,
+      userArchivedAt: '2025-10-01T00:00:00.000Z'
+    }
+    const message: SessionMessage = {
+      id: 'session-prune-1-u1',
+      sessionId: 'session-prune-1',
+      role: 'user',
+      content: 'old',
+      format: 'text',
+      timestamp: '2025-10-01T00:00:00.000Z'
+    }
+    await fs.writeFile(storagePath, `${JSON.stringify({ sessions: [summary], messages: [message] }, null, 2)}\n`, 'utf8')
+
+    const storage = new SessionStorage(storagePath)
+    storage.mergeFromSync([], '2026-03-16T00:00:00.000Z')
+
+    expect(storage.list('')).toHaveLength(0)
+    expect(storage.getSessionDetail('session-prune-1')).toBeNull()
   })
 })
