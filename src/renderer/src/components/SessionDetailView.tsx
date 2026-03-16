@@ -2,7 +2,7 @@ import React, { useEffect } from 'react'
 import AnsiToHtml from 'ansi-to-html'
 import { marked } from 'marked'
 import type { SessionDetail, SessionMessage } from '@shared/types'
-import { formatMinuteKeyIST, formatSessionOrigin, formatTimestampIST } from '@shared/format'
+import { formatMinuteKeyIST, formatSessionOrigin, formatTimestampIST, normalizeModelLabel } from '@shared/format'
 
 const ansiConverter = new AnsiToHtml({ fg: '#e6edf3', bg: '#161b22', newline: true, escapeXML: true })
 
@@ -13,6 +13,8 @@ const renderAssistantContent = (content: string): string => {
 
   return marked.parse(content, { breaks: true }) as string
 }
+
+const renderUserContent = (content: string): string => marked.parse(content, { breaks: true }) as string
 
 interface Props {
   detail: SessionDetail | null
@@ -141,7 +143,7 @@ export const SessionDetailView = ({
           <h2 title={detail.title}>{detail.title}</h2>
           <div className="detail-meta">
             <span>Origin: {formatSessionOrigin(detail.source)}</span>
-            <span>Model: {detail.model ?? 'Unknown'}</span>
+            <span>Model: {normalizeModelLabel(detail.model) || 'Unknown'}</span>
             <span>Updated: {formatTimestampIST(detail.updatedAt)}</span>
             <span>Messages: {detail.messageCount}</span>
           </div>
@@ -223,7 +225,7 @@ export const SessionDetailView = ({
               {message.role === 'assistant' ? (
                 <div dangerouslySetInnerHTML={{ __html: renderAssistantContent(message.combinedContent) }} />
               ) : (
-                <pre>{message.combinedContent}</pre>
+                <div dangerouslySetInnerHTML={{ __html: renderUserContent(message.combinedContent) }} />
               )}
             </div>
             <time className="message-time">{formatTimestampIST(message.timestamp)}</time>

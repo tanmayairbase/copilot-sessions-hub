@@ -9,7 +9,7 @@ const detail: SessionDetail = {
   source: 'cli',
   repoPath: '/repos/a',
   title: 'Session title',
-  model: 'gpt-5.3-codex',
+  model: 'copilot/gpt-5.3-codex',
   createdAt: '2026-03-11T10:00:00.000Z',
   updatedAt: '2026-03-11T10:05:00.000Z',
   messageCount: 4,
@@ -37,7 +37,7 @@ const detail: SessionDetail = {
       id: 'm3',
       sessionId: 's1',
       role: 'user',
-      content: 'question',
+      content: 'Use `pnpm build` before deploy.',
       format: 'text',
       timestamp: '2026-03-11T10:01:00.000Z',
       references: [{ path: '/repos/a/src/index.tsx', startLine: 48, endLine: 52 }]
@@ -65,8 +65,10 @@ describe('SessionDetailView grouping', () => {
     const assistantBubbles = screen.getAllByLabelText('assistant message')
     expect(assistantBubbles).toHaveLength(2)
     expect(screen.getByText('Origin: CLI')).toBeTruthy()
+    expect(screen.getByText('Model: gpt-5.3-codex')).toBeTruthy()
     expect(screen.getByText('index.tsx:48-52')).toBeTruthy()
     expect(screen.getByText('Edited index.tsx +1 -1 (88-88)')).toBeTruthy()
+    expect(screen.getByText('pnpm build')).toBeTruthy()
     expect(screen.getByText(/line one/)).toBeTruthy()
     expect(screen.getByText(/line two/)).toBeTruthy()
     expect(screen.queryByText('Read-only transcript')).toBeNull()

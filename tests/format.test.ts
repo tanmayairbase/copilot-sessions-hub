@@ -4,6 +4,7 @@ import {
   formatTimestampIST,
   matchesIstDatePreset,
   matchesRepositoryFilter,
+  normalizeModelLabel,
   toTildePath
 } from '../src/shared/format'
 
@@ -44,5 +45,14 @@ describe('matchesRepositoryFilter', () => {
   it('matches only exact repository selections', () => {
     expect(matchesRepositoryFilter('/Users/trajani/projects', ['/Users/trajani/projects'])).toBe(true)
     expect(matchesRepositoryFilter('/Users/trajani/projects/frontend2', ['/Users/trajani/projects'])).toBe(false)
+  })
+})
+
+describe('normalizeModelLabel', () => {
+  it('removes copilot provider prefix and trims whitespace', () => {
+    expect(normalizeModelLabel(' copilot/gpt-5.3-codex ')).toBe('gpt-5.3-codex')
+    expect(normalizeModelLabel('copilot/claude-sonnet-4.6')).toBe('claude-sonnet-4.6')
+    expect(normalizeModelLabel('gpt-5.3-codex')).toBe('gpt-5.3-codex')
+    expect(normalizeModelLabel('')).toBe('')
   })
 })

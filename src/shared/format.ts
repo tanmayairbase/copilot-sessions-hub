@@ -88,6 +88,14 @@ export const toSearchPreview = (value: string, maxLength = 120): string => {
   return `${value.slice(0, maxLength - 1)}…`
 }
 
+export const normalizeModelLabel = (value: string | null | undefined): string => {
+  const trimmed = (value ?? '').trim()
+  if (!trimmed) {
+    return ''
+  }
+  return trimmed.replace(/^copilot\//i, '')
+}
+
 export const formatSessionOrigin = (origin: SessionSource): string => {
   if (origin === 'vscode') {
     return 'VS Code'

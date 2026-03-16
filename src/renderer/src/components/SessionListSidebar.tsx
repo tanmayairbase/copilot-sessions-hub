@@ -337,7 +337,11 @@ export const SessionListSidebar = ({
         )}
       </div>
 
-      <div className="session-list" role="listbox" aria-label="Session list">
+      <div
+        className={`session-list ${starredMessages.length === 0 ? 'session-list-no-starred' : ''}`}
+        role="listbox"
+        aria-label="Session list"
+      >
         {starredMessages.length > 0 && (
           <section className="starred-section" aria-label="Starred messages">
             <button

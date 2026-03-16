@@ -9,7 +9,7 @@ import type {
   SyncResult
 } from '@shared/types'
 import type { DateFilterPreset } from '@shared/format'
-import { matchesIstDatePreset, matchesRepositoryFilter } from '@shared/format'
+import { matchesIstDatePreset, matchesRepositoryFilter, normalizeModelLabel } from '@shared/format'
 import { SessionDetailView } from './components/SessionDetailView'
 import {
   SessionListSidebar,
@@ -134,7 +134,7 @@ export const App = () => {
   const repositoryOptions = useMemo(() => (config?.repoRoots ?? []).slice().sort((a, b) => a.localeCompare(b)), [config])
   const modelOptions = useMemo(
     () =>
-      [...new Set(sessions.map((session) => session.model).filter((model): model is string => Boolean(model)))]
+      [...new Set(sessions.map((session) => normalizeModelLabel(session.model)).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b)),
     [sessions]
   )
@@ -182,7 +182,8 @@ export const App = () => {
       if (!matchesRepositoryFilter(session.repoPath, selectedRepos)) {
         return false
       }
-      if (selectedModels.length > 0 && (!session.model || !selectedModels.includes(session.model))) {
+      const modelLabel = normalizeModelLabel(session.model)
+      if (selectedModels.length > 0 && (!modelLabel || !selectedModels.includes(modelLabel))) {
         return false
       }
       if (selectedOrigins.length > 0 && !selectedOrigins.includes(session.source)) {

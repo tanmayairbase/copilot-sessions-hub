@@ -80,7 +80,8 @@ button:hover {
 
 .sidebar-search-wrap {
   padding: 12px;
-  border-bottom: 1px solid #21262d;
+  border-bottom: 0;
+  box-shadow: none;
 }
 
 .sidebar-search {
@@ -269,6 +270,16 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  border-top: 0;
+}
+
+.session-list-no-starred {
+  padding-top: 0;
+}
+
+.session-list-no-starred > .session-item:first-of-type {
+  margin-top: 8px;
+  border-top: 0;
 }
 
 .session-item {
@@ -381,6 +392,8 @@ button:hover {
   gap: 8px;
   padding: 8px;
   background: #111827;
+  max-height: min(44vh, 360px);
+  overflow: auto;
 }
 
 .starred-item {
@@ -600,6 +613,8 @@ button:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 120ms ease-in-out;
 }
 
 .message-star svg {
@@ -608,8 +623,14 @@ button:hover {
   fill: currentColor;
 }
 
+.message:hover .message-star,
+.message:focus-within .message-star {
+  opacity: 1;
+}
+
 .message-star.active {
   color: #fbbf24;
+  opacity: 1;
 }
 
 .message-artifacts {
@@ -638,6 +659,10 @@ button:hover {
   word-break: break-word;
   overflow-wrap: anywhere;
   line-height: 1.55;
+  background: #171412;
+  border: 1px solid #4b3d35;
+  border-radius: 8px;
+  padding: 10px;
 }
 
 .message-content p {
@@ -657,16 +682,20 @@ button:hover {
 }
 
 .message-content code {
-  background: #0d1117;
-  border: 1px solid #30363d;
+  background: #221c19;
+  border: 1px solid #4b3d35;
   border-radius: 6px;
   padding: 1px 5px;
+  color: #d8c0ad;
 }
 
 .message-content pre code {
   display: block;
-  padding: 10px;
+  padding: 0;
   overflow: auto;
+  background: transparent;
+  border: 0;
+  color: #d8c0ad;
 }
 
 .ansi-output {
