@@ -13,6 +13,7 @@ export interface SessionSummary {
   source: SessionSource
   repoPath: string
   title: string
+  agent?: string | null
   model: string | null
   createdAt: string
   updatedAt: string

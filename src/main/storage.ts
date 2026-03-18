@@ -355,6 +355,7 @@ export class SessionStorage {
           session.id,
           session.title,
           session.repoPath,
+          session.agent ?? '',
           session.model ?? '',
           ...(messageBySession.get(session.id) ?? [])
         ]

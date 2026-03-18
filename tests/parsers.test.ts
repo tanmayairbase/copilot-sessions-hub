@@ -130,6 +130,51 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].session.source).toBe('cli')
   })
 
+  it('detects custom CLI agent from events payload', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-events-custom-agent',
+          producer: 'copilot-agent',
+          copilotVersion: '1.0.7',
+          startTime: '2026-03-10T10:00:00.000Z',
+          context: { cwd: '/tmp/repo-events' }
+        },
+        timestamp: '2026-03-10T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: { content: 'run the workflow' },
+        timestamp: '2026-03-10T10:00:01.000Z'
+      }),
+      JSON.stringify({
+        type: 'subagent.started',
+        data: {
+          agentName: 'security-upgrade-agent',
+          agentDisplayName: 'security-upgrade-agent'
+        },
+        timestamp: '2026-03-10T10:00:02.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Running security-upgrade-agent now.' },
+        timestamp: '2026-03-10T10:00:03.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-custom-agent/events.jsonl',
+      repoRoot: '/tmp/repo-events',
+      source: 'cli'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].session.source).toBe('cli')
+    expect(parsed[0].session.agent).toBe('security-upgrade-agent')
+  })
+
   it('uses CLI summary hints for events session title', () => {
     const raw = [
       JSON.stringify({

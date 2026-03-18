@@ -247,7 +247,7 @@ export const SessionListSidebar = ({
             className="sidebar-search"
             value={query}
             onChange={event => onQueryChange(event.target.value)}
-            placeholder="Search messages, title, repo, model"
+            placeholder="Search messages, title, repo, model, agent"
           />
           {query.trim().length > 0 && (
             <button

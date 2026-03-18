@@ -42,6 +42,26 @@ const firstString = (...values: unknown[]): string | null => {
   return null
 }
 
+const BUILT_IN_TASK_AGENTS = new Set([
+  'explore',
+  'task',
+  'general-purpose',
+  'code-review',
+  'configure-copilot'
+])
+
+const normalizeAgent = (value: unknown): string | null => {
+  const normalized = firstString(value)?.replace(/\s+/g, ' ').trim()
+  if (!normalized) {
+    return null
+  }
+  const lowered = normalized.toLowerCase()
+  if (lowered === 'copilot-agent' || BUILT_IN_TASK_AGENTS.has(lowered)) {
+    return null
+  }
+  return normalized
+}
+
 const inferSource = (
   filePath: string,
   fallback: SessionSource = 'cli'
@@ -325,6 +345,14 @@ const normalizeSession = (
     source,
     repoPath,
     title,
+    agent: normalizeAgent(
+      firstString(
+        candidate.agent,
+        candidate.agentName,
+        candidate.metadata?.agent,
+        candidate.metadata?.agentName
+      )
+    ),
     model: firstString(
       candidate.model,
       candidate.modelName,
@@ -362,6 +390,119 @@ interface SessionEvent {
   type?: string
   timestamp?: string
   data?: Record<string, unknown>
+}
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
+const parseRecord = (value: unknown): Record<string, unknown> | null => {
+  const direct = asRecord(value)
+  if (direct) {
+    return direct
+  }
+  const text = firstString(value)
+  if (!text) {
+    return null
+  }
+  try {
+    return asRecord(JSON.parse(text))
+  } catch {
+    return null
+  }
+}
+
+const extractTaskAgentType = (value: unknown): string | null => {
+  const record = parseRecord(value)
+  if (!record) {
+    return null
+  }
+  return normalizeAgent(
+    firstString(
+      record['agent_type'],
+      record['agentType'],
+      record['agent'],
+      asRecord(record['metadata'])?.['agentType'],
+      asRecord(record['metadata'])?.['agent']
+    )
+  )
+}
+
+const extractTaskAgentFromToolRequests = (value: unknown): string | null => {
+  if (!Array.isArray(value)) {
+    return null
+  }
+  for (const item of value) {
+    const request = asRecord(item)
+    if (!request) {
+      continue
+    }
+    if (firstString(request['name'])?.toLowerCase() !== 'task') {
+      continue
+    }
+    const agent = extractTaskAgentType(request['arguments'])
+    if (agent) {
+      return agent
+    }
+  }
+  return null
+}
+
+const extractEventLogAgent = (
+  lines: SessionEvent[],
+  sessionStart: SessionEvent | undefined
+): string | null => {
+  const fromSubagentStarted = lines
+    .map(line => {
+      if (line.type !== 'subagent.started') {
+        return null
+      }
+      return normalizeAgent(
+        firstString(line.data?.['agentDisplayName'], line.data?.['agentName'])
+      )
+    })
+    .find((value): value is string => Boolean(value))
+  if (fromSubagentStarted) {
+    return fromSubagentStarted
+  }
+
+  const fromTaskExecution = lines
+    .map(line => {
+      if (line.type !== 'tool.execution_start') {
+        return null
+      }
+      const toolName = firstString(line.data?.['toolName'])?.toLowerCase()
+      if (toolName !== 'task') {
+        return null
+      }
+      return extractTaskAgentType(line.data?.['arguments'])
+    })
+    .find((value): value is string => Boolean(value))
+  if (fromTaskExecution) {
+    return fromTaskExecution
+  }
+
+  const fromAssistantRequests = lines
+    .map(line => {
+      if (line.type !== 'assistant.message') {
+        return null
+      }
+      return extractTaskAgentFromToolRequests(line.data?.['toolRequests'])
+    })
+    .find((value): value is string => Boolean(value))
+  if (fromAssistantRequests) {
+    return fromAssistantRequests
+  }
+
+  return normalizeAgent(
+    firstString(
+      sessionStart?.data?.['agentDisplayName'],
+      sessionStart?.data?.['agentName']
+    )
+  )
 }
 
 interface VsCodeSessionMutation {
@@ -861,6 +1002,22 @@ const parseVsCodeChatSessionLog = (
           ?.selectedModel as Record<string, unknown> | undefined
       )?.identifier
     )
+  const agent = normalizeAgent(
+    firstString(
+      (
+        (sessionState.inputState as Record<string, unknown> | undefined)
+          ?.selectedAgent as Record<string, unknown> | undefined
+      )?.id,
+      (
+        (sessionState.inputState as Record<string, unknown> | undefined)
+          ?.selectedAgent as Record<string, unknown> | undefined
+      )?.name,
+      (
+        (sessionState.inputState as Record<string, unknown> | undefined)
+          ?.selectedAgent as Record<string, unknown> | undefined
+      )?.identifier
+    )
+  )
 
   const titleSeed =
     messages.find(message => message.role === 'user')?.content ??
@@ -880,6 +1037,7 @@ const parseVsCodeChatSessionLog = (
     repoPath: context.repoRoot,
     title:
       firstString(sessionState.customTitle)?.trim() || titleSeed.slice(0, 120),
+    agent,
     model,
     createdAt,
     updatedAt,
@@ -1008,6 +1166,7 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
     .reverse()
     .map(line => firstString(line.data?.['model']))
     .find((value): value is string => Boolean(value))
+  const detectedAgent = extractEventLogAgent(lines, sessionStart)
 
   const titleSeed =
     messages.find(message => message.role === 'user')?.content ??
@@ -1034,6 +1193,7 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
     title: normalizedPreferredTitle
       ? normalizedPreferredTitle.slice(0, 120)
       : titleSeed.slice(0, 120),
+    agent: detectedAgent,
     model: firstString(
       lastToolModel,
       sessionStart?.data?.['model'],

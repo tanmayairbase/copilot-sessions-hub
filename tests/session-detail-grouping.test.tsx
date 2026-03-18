@@ -9,6 +9,7 @@ const detail: SessionDetail = {
   source: 'cli',
   repoPath: '/repos/a',
   title: 'Session title',
+  agent: 'security-upgrade-agent',
   model: 'copilot/gpt-5.3-codex',
   createdAt: '2026-03-11T10:00:00.000Z',
   updatedAt: '2026-03-11T10:05:00.000Z',
@@ -75,6 +76,7 @@ describe('SessionDetailView grouping', () => {
     const assistantBubbles = screen.getAllByLabelText('assistant message')
     expect(assistantBubbles).toHaveLength(2)
     expect(screen.getByText('Origin: CLI')).toBeTruthy()
+    expect(screen.getByText('Agent: security-upgrade-agent')).toBeTruthy()
     expect(screen.getByText('Model: gpt-5.3-codex')).toBeTruthy()
     expect(screen.getByText('index.tsx:48-52')).toBeTruthy()
     expect(screen.getByText('Edited index.tsx +1 -1 (88-88)')).toBeTruthy()

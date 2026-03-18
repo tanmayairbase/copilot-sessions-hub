@@ -105,7 +105,7 @@ export const App = () => {
   }, [apiRef])
 
   const refreshList = useCallback(
-    async (query: string): Promise<void> => {
+    async (query: string): Promise<SessionSummary[]> => {
       uiLog('Refreshing session list', { query })
       const api = ensureApi()
       const rows = await api.listSessions(query)
@@ -129,6 +129,31 @@ export const App = () => {
         stars: stars.length,
         allStars: allStars.length
       })
+      return rows
+    },
+    [ensureApi]
+  )
+
+  const refreshSelectedDetailIfPresent = useCallback(
+    async (
+      sessionId: string | null,
+      selectableRows?: SessionSummary[]
+    ): Promise<void> => {
+      if (!sessionId) {
+        return
+      }
+      if (selectableRows && !selectableRows.some(row => row.id === sessionId)) {
+        return
+      }
+      try {
+        const detail = await ensureApi().getSessionDetail(sessionId)
+        setSelectedDetail(detail)
+      } catch (error) {
+        uiLog('Failed refreshing selected session detail', {
+          sessionId,
+          message: (error as Error).message
+        })
+      }
     },
     [ensureApi]
   )
@@ -407,7 +432,8 @@ export const App = () => {
     try {
       const result = await ensureApi().syncSessions()
       setSyncResult(result)
-      await refreshList(searchQuery)
+      const rows = await refreshList(searchQuery)
+      await refreshSelectedDetailIfPresent(selectedId, rows)
       setToast(
         `Sync complete: ${result.sessionsImported} sessions imported from ${result.filesScanned} files.`
       )
@@ -436,7 +462,8 @@ export const App = () => {
       })
       const result = await ensureApi().syncSessions()
       setSyncResult(result)
-      await refreshList(searchQuery)
+      const rows = await refreshList(searchQuery)
+      await refreshSelectedDetailIfPresent(selectedId, rows)
       setToast(
         `Config saved and synced: ${result.sessionsImported} sessions imported from ${result.filesScanned} files.`
       )

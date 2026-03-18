@@ -174,6 +174,7 @@ export const SessionDetailView = ({
           <h2 title={detail.title}>{detail.title}</h2>
           <div className="detail-meta">
             <span>Origin: {formatSessionOrigin(detail.source)}</span>
+            {detail.agent ? <span>Agent: {detail.agent}</span> : null}
             <span>Model: {normalizeModelLabel(detail.model) || 'Unknown'}</span>
             <span>Updated: {formatTimestampIST(detail.updatedAt)}</span>
             <span>Messages: {detail.messageCount}</span>
