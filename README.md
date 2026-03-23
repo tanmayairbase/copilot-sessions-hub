@@ -69,6 +69,8 @@ pnpm lint
 pnpm typecheck
 ```
 
+This repo also includes a root `tsconfig.json` and workspace VS Code TypeScript settings so the editor uses the same project graph and local TypeScript version as the CLI checks.
+
 ## Production build/package
 
 Build app bundles:
