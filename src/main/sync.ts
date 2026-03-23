@@ -1,15 +1,26 @@
+import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fg from 'fast-glob'
-import type { AppConfig, SessionSummary, SyncResult } from '../shared/types'
+import type {
+  AppConfig,
+  SessionSource,
+  SessionSummary,
+  SyncResult
+} from '../shared/types'
 import { logError, logInfo, logWarn } from './logger'
 import { loadOpenCodeSessions } from './opencode'
 import { parseSessionArtifacts } from './parsers'
-import { SessionStorage, type SessionInsert } from './storage'
+import {
+  SessionStorage,
+  type ArtifactSyncCacheEntry,
+  type SessionInsert
+} from './storage'
 
 const MAX_FILE_SIZE_BYTES = 64 * 1024 * 1024
+const ARTIFACT_CACHE_PARSER_VERSION = 3
 
 const expandHome = (value: string): string =>
   value.startsWith('~/') ? join(homedir(), value.slice(2)) : value
@@ -120,6 +131,28 @@ interface CliSessionSummaryRow {
   summary: string
 }
 
+const detectSourceFromFilePath = (filePath: string): SessionSource =>
+  filePath.toLowerCase().includes('chatsessions') ||
+  filePath.toLowerCase().includes('vscode')
+    ? 'vscode'
+    : 'cli'
+
+const cliSummaryToken = (cliSummaryBySessionId: Map<string, string>): string => {
+  if (cliSummaryBySessionId.size === 0) {
+    return ''
+  }
+  const hash = createHash('sha1')
+  for (const [sessionId, summary] of [...cliSummaryBySessionId.entries()].sort(
+    (a, b) => a[0].localeCompare(b[0])
+  )) {
+    hash.update(sessionId)
+    hash.update('\u0000')
+    hash.update(summary)
+    hash.update('\n')
+  }
+  return hash.digest('hex')
+}
+
 const loadCliSessionSummaryMap = async (): Promise<Map<string, string>> => {
   const summaries = new Map<string, string>()
   if (
@@ -175,16 +208,21 @@ export const syncSessions = async (
   config: AppConfig,
   storage: SessionStorage
 ): Promise<SyncResult> => {
+  const syncStartedAt = performance.now()
   const repoRoots = unique(
     config.repoRoots.map(expandHome).map(value => resolve(value))
   )
   const patterns = buildSearchPatterns(config)
   const cliSummaryBySessionId = await loadCliSessionSummaryMap()
+  const summaryToken = cliSummaryToken(cliSummaryBySessionId)
+  const previousArtifactCache = storage.getArtifactSyncCache()
+  const nextArtifactCacheByPath = new Map<string, ArtifactSyncCacheEntry>()
   logInfo('Starting sync', {
     repoRoots: repoRoots.length,
     discoveryMode: config.discoveryMode,
     patterns: patterns.length,
-    cliSummaries: cliSummaryBySessionId.size
+    cliSummaries: cliSummaryBySessionId.size,
+    cachedArtifacts: previousArtifactCache.size
   })
 
   const result: SyncResult = {
@@ -195,6 +233,7 @@ export const syncSessions = async (
   }
 
   const files = new Set<string>()
+  const scanStartedAt = performance.now()
 
   for (const root of repoRoots) {
     try {
@@ -259,9 +298,13 @@ export const syncSessions = async (
   for (const entry of globalVsCodeEntries) {
     files.add(entry)
   }
+  const scanDurationMs = Math.round(performance.now() - scanStartedAt)
 
   const inserts: SessionInsert[] = []
   let ignoredByRepoFilter = 0
+  let skippedUnchanged = 0
+  let parsedFiles = 0
+  const parseStartedAt = performance.now()
 
   for (const filePath of files) {
     result.filesScanned += 1
@@ -278,8 +321,6 @@ export const syncSessions = async (
         continue
       }
 
-      const raw = await fs.readFile(filePath, 'utf8')
-
       const repoRootFromWorkspace =
         await repoRootFromVsCodeWorkspaceStorage(filePath)
       const repoRoot =
@@ -289,17 +330,39 @@ export const syncSessions = async (
           filePath.includes(root.split('/').at(-1) ?? '')
         ) ??
         filePath
+      const source = detectSourceFromFilePath(filePath)
+      const cacheToken = source === 'cli' ? summaryToken : ''
+      const cached = previousArtifactCache.get(filePath)
+      const unchanged = Boolean(
+        cached &&
+          cached.mtimeMs === stat.mtimeMs &&
+          cached.size === stat.size &&
+          cached.repoRoot === repoRoot &&
+          cached.source === source &&
+          cached.cliSummaryToken === cacheToken &&
+          cached.parserVersion === ARTIFACT_CACHE_PARSER_VERSION
+      )
+      if (unchanged && cached) {
+        skippedUnchanged += 1
+        nextArtifactCacheByPath.set(filePath, cached)
+        for (const artifact of cached.inserts) {
+          if (!inRepoRoots(artifact.session.repoPath, repoRoots)) {
+            ignoredByRepoFilter += 1
+            continue
+          }
+          inserts.push(artifact)
+        }
+        continue
+      }
 
+      const raw = await fs.readFile(filePath, 'utf8')
       const parsed = parseSessionArtifacts(raw, {
         filePath,
         repoRoot,
-        source:
-          filePath.toLowerCase().includes('chatsessions') ||
-          filePath.toLowerCase().includes('vscode')
-            ? 'vscode'
-            : 'cli',
+        source,
         cliSummaryBySessionId
       })
+      parsedFiles += 1
       logInfo('Parsed session artifact file', {
         filePath,
         sessionsFound: parsed.length
@@ -312,6 +375,16 @@ export const syncSessions = async (
         }
         inserts.push(artifact)
       }
+      nextArtifactCacheByPath.set(filePath, {
+        filePath,
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+        repoRoot,
+        source,
+        cliSummaryToken: cacheToken,
+        parserVersion: ARTIFACT_CACHE_PARSER_VERSION,
+        inserts: parsed
+      })
     } catch (error) {
       logError('Failed processing artifact file', {
         filePath,
@@ -325,7 +398,9 @@ export const syncSessions = async (
   if (openCodeSessions.length > 0) {
     inserts.push(...openCodeSessions)
   }
+  const parseDurationMs = Math.round(performance.now() - parseStartedAt)
 
+  const dedupeStartedAt = performance.now()
   const dedupedById = new Map<string, SessionInsert>()
   for (const insert of inserts) {
     const current = dedupedById.get(insert.session.id)
@@ -343,8 +418,15 @@ export const syncSessions = async (
       new Date(a.session.updatedAt).getTime()
     )
   })
+  const dedupeDurationMs = Math.round(performance.now() - dedupeStartedAt)
 
-  const mergeResult = storage.mergeFromSync(finalInserts)
+  const mergeStartedAt = performance.now()
+  const mergeResult = storage.mergeFromSync(
+    finalInserts,
+    new Date().toISOString(),
+    [...nextArtifactCacheByPath.values()]
+  )
+  const mergeDurationMs = Math.round(performance.now() - mergeStartedAt)
   result.sessionsImported = finalInserts.length
 
   if (result.errors.length > 20) {
@@ -352,6 +434,11 @@ export const syncSessions = async (
   }
 
   logInfo('Sync completed', {
+    durationMs: Math.round(performance.now() - syncStartedAt),
+    scanDurationMs,
+    parseDurationMs,
+    dedupeDurationMs,
+    mergeDurationMs,
     filesScanned: result.filesScanned,
     sessionsImported: result.sessionsImported,
     totalSessionsRetained: mergeResult.totalSessions,
@@ -359,8 +446,11 @@ export const syncSessions = async (
     updatedExisting: mergeResult.updatedSessions,
     archivedSessions: mergeResult.archivedSessions,
     skippedFiles: result.skippedFiles,
+    skippedUnchanged,
+    parsedFiles,
     ignoredByRepoFilter,
-    errors: result.errors.length
+    errors: result.errors.length,
+    cachedArtifacts: nextArtifactCacheByPath.size
   })
 
   return result

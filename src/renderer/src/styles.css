@@ -276,6 +276,7 @@ button:hover {
   flex-direction: column;
   gap: 8px;
   border-top: 0;
+  position: relative;
 }
 
 .session-list-no-starred {
@@ -287,7 +288,27 @@ button:hover {
   border-top: 0;
 }
 
+.session-list-main {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+}
+
+.session-list-main-static {
+  display: grid;
+  gap: 8px;
+}
+
+.session-list-main-no-starred {
+  margin-top: 8px;
+}
+
+.virtual-session-row {
+  width: 100%;
+}
+
 .session-item {
+  width: 100%;
   text-align: left;
   background: #111827;
   border: 1px solid #1f2937;
@@ -582,6 +603,14 @@ button:hover {
   gap: 16px;
 }
 
+.message-load-older {
+  align-self: center;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  padding: 6px 12px;
+}
+
 .message {
   max-width: 78%;
   border: 1px solid #21262d;
@@ -768,7 +797,8 @@ button:hover {
 }
 
 .modal textarea,
-.modal select {
+.modal select,
+.modal input[type='number'] {
   width: 100%;
   border: 1px solid #30363d;
   border-radius: 8px;

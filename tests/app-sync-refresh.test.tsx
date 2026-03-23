@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from '@testing-library/react'
 import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -27,7 +33,15 @@ const baseSession: SessionSummary = {
 const config: AppConfig = {
   repoRoots: ['/repos/a'],
   discoveryMode: 'both',
-  explicitPatterns: []
+  explicitPatterns: [],
+  syncMode: 'manual',
+  backgroundSyncIntervalMinutes: 10
+}
+
+const backgroundConfig: AppConfig = {
+  ...config,
+  syncMode: 'manual-plus-background',
+  backgroundSyncIntervalMinutes: 1
 }
 
 const syncResult: SyncResult = {
@@ -95,5 +109,76 @@ describe('App sync detail refresh', () => {
 
     expect(api.syncSessions).toHaveBeenCalledTimes(1)
     expect(api.getSessionDetail).toHaveBeenCalledTimes(2)
+  })
+
+  it('schedules periodic background sync and prevents overlap storms', async () => {
+    let currentMessageCount = 1
+    let resolveFirstSync: (result: SyncResult) => void = () => undefined
+    const firstSyncPromise = new Promise<SyncResult>(resolve => {
+      resolveFirstSync = resolve
+    })
+    let intervalCallback: () => void = () => undefined
+    const setIntervalSpy = vi
+      .spyOn(window, 'setInterval')
+      .mockImplementation((callback: TimerHandler) => {
+        intervalCallback = callback as () => void
+        return 1
+      })
+    const clearIntervalSpy = vi
+      .spyOn(window, 'clearInterval')
+      .mockImplementation(() => undefined)
+
+    const api: RendererApi = {
+      getConfig: vi.fn(async () => backgroundConfig),
+      saveConfig: vi.fn(async () => backgroundConfig),
+      openConfigFile: vi.fn(async () => undefined),
+      syncSessions: vi.fn(async () => {
+        currentMessageCount += 1
+        if (currentMessageCount === 2) {
+          return firstSyncPromise
+        }
+        return syncResult
+      }),
+      listSessions: vi.fn(async () => [
+        {
+          ...baseSession,
+          messageCount: currentMessageCount
+        }
+      ]),
+      getSessionDetail: vi.fn(async () => buildDetail(currentMessageCount)),
+      openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
+      setSessionArchived: vi.fn(async () => null),
+      setMessageStarred: vi.fn(async () => null),
+      listStarredMessages: vi.fn(async () => [])
+    }
+
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions = api
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Messages: 1')).toBeTruthy()
+      expect(screen.getByText('Background sync enabled')).toBeTruthy()
+    })
+
+    intervalCallback()
+    await waitFor(() => {
+      expect(api.syncSessions).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('Background sync running...')).toBeTruthy()
+    })
+
+    intervalCallback()
+    expect(api.syncSessions).toHaveBeenCalledTimes(1)
+
+    resolveFirstSync(syncResult)
+    await waitFor(() => {
+      expect(api.syncSessions).toHaveBeenCalledTimes(1)
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Messages: 2')).toBeTruthy()
+    })
+    expect(screen.queryByText(/Sync complete:/)).toBeNull()
+
+    setIntervalSpy.mockRestore()
+    clearIntervalSpy.mockRestore()
   })
 })

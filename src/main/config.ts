@@ -14,7 +14,9 @@ const defaultPatterns = [
 const appConfigSchema = z.object({
   repoRoots: z.array(z.string()).default([]),
   discoveryMode: z.enum(['autodiscovery', 'explicit', 'both']).default('both'),
-  explicitPatterns: z.array(z.string()).default(defaultPatterns)
+  explicitPatterns: z.array(z.string()).default(defaultPatterns),
+  syncMode: z.enum(['manual', 'manual-plus-background']).default('manual'),
+  backgroundSyncIntervalMinutes: z.number().int().default(10)
 })
 
 const expandHome = (value: string): string => {
@@ -43,7 +45,16 @@ export class ConfigService {
       config.explicitPatterns.length > 0
         ? config.explicitPatterns
         : defaultPatterns
-    return { ...config, repoRoots, explicitPatterns }
+    const interval = Number.isFinite(config.backgroundSyncIntervalMinutes)
+      ? Math.max(1, Math.min(1440, Math.trunc(config.backgroundSyncIntervalMinutes)))
+      : 10
+    return {
+      ...config,
+      repoRoots,
+      explicitPatterns,
+      syncMode: config.syncMode ?? 'manual',
+      backgroundSyncIntervalMinutes: interval
+    }
   }
 
   async load(): Promise<AppConfig> {
@@ -81,7 +92,9 @@ export class ConfigService {
       const fallback: AppConfig = {
         repoRoots: defaultRoots,
         discoveryMode: 'both',
-        explicitPatterns: defaultPatterns
+        explicitPatterns: defaultPatterns,
+        syncMode: 'manual',
+        backgroundSyncIntervalMinutes: 10
       }
       await this.save(fallback)
       return fallback

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import type { AppConfig, DiscoveryMode } from '@shared/types'
+import type { AppConfig, DiscoveryMode, SyncMode } from '@shared/types'
 
 interface Props {
   isOpen: boolean
@@ -12,6 +12,9 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
   const [repoRoots, setRepoRoots] = useState('')
   const [explicitPatterns, setExplicitPatterns] = useState('')
   const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode>('both')
+  const [syncMode, setSyncMode] = useState<SyncMode>('manual')
+  const [backgroundSyncIntervalMinutes, setBackgroundSyncIntervalMinutes] =
+    useState('10')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -23,6 +26,10 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
     setRepoRoots(config.repoRoots.join('\n'))
     setExplicitPatterns(config.explicitPatterns.join('\n'))
     setDiscoveryMode(config.discoveryMode)
+    setSyncMode(config.syncMode)
+    setBackgroundSyncIntervalMinutes(
+      String(config.backgroundSyncIntervalMinutes)
+    )
   }, [config])
 
   if (!isOpen) {
@@ -42,7 +49,12 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
           .split(/\r?\n/)
           .map(item => item.trim())
           .filter(Boolean),
-        discoveryMode
+        discoveryMode,
+        syncMode,
+        backgroundSyncIntervalMinutes: Math.max(
+          1,
+          Number.parseInt(backgroundSyncIntervalMinutes, 10) || 10
+        )
       })
       onClose()
     } catch (error) {
@@ -94,6 +106,33 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
             value={explicitPatterns}
             onChange={event => setExplicitPatterns(event.target.value)}
             rows={5}
+          />
+        </label>
+
+        <label>
+          Background sync mode
+          <select
+            value={syncMode}
+            onChange={event => setSyncMode(event.target.value as SyncMode)}
+            aria-label="Background sync mode"
+          >
+            <option value="manual">Manual sync only</option>
+            <option value="manual-plus-background">
+              Manual + periodic background sync
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Background sync interval (minutes)
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            value={backgroundSyncIntervalMinutes}
+            onChange={event =>
+              setBackgroundSyncIntervalMinutes(event.target.value)
+            }
           />
         </label>
 

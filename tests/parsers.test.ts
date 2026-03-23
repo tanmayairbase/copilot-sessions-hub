@@ -175,6 +175,47 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].session.agent).toBe('security-upgrade-agent')
   })
 
+  it('detects custom CLI agent from transformed instructions when subagent event is absent', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-events-custom-agent-fallback',
+          producer: 'copilot-agent',
+          copilotVersion: '1.0.9',
+          startTime: '2026-03-10T10:00:00.000Z',
+          context: { cwd: '/tmp/repo-events' }
+        },
+        timestamp: '2026-03-10T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: {
+          content: 'let us continue',
+          transformedContent:
+            '<agent_instructions>\n# Any removal-first migration agent\n\nFollow these instructions.\n</agent_instructions>'
+        },
+        timestamp: '2026-03-10T10:00:01.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Continuing now.' },
+        timestamp: '2026-03-10T10:00:02.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-custom-agent-fallback/events.jsonl',
+      repoRoot: '/tmp/repo-events',
+      source: 'cli'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].session.source).toBe('cli')
+    expect(parsed[0].session.agent).toBe('any-removal-first-migration-agent')
+  })
+
   it('uses CLI summary hints for events session title', () => {
     const raw = [
       JSON.stringify({

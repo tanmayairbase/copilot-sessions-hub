@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   SessionSource,
   SessionSummary,
@@ -57,6 +57,240 @@ interface MultiSelectProps {
   emptyLabel: string
   isOpen: boolean
   onOpen: (menu: Exclude<FilterMenu, null>) => void
+}
+
+const SESSION_ROW_GAP = 8
+const SESSION_ROW_HEIGHT_ESTIMATE = 88
+const SESSION_OVERSCAN_PX = 320
+const SESSION_VIRTUALIZE_THRESHOLD = 80
+
+interface VirtualizedSessionRowsProps {
+  sessions: SessionSummary[]
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  renderSessionRow: (session: SessionSummary) => React.ReactNode
+  noStarredSection: boolean
+}
+
+const getEstimatedRowSize = (index: number, total: number): number =>
+  SESSION_ROW_HEIGHT_ESTIMATE + (index === total - 1 ? 0 : SESSION_ROW_GAP)
+
+const getOffsetTopWithin = (
+  element: HTMLElement,
+  ancestor: HTMLElement
+): number => {
+  let offset = 0
+  let node: HTMLElement | null = element
+  while (node && node !== ancestor) {
+    offset += node.offsetTop
+    node = node.parentElement
+  }
+  return offset
+}
+
+const findStartIndex = (
+  starts: number[],
+  sizes: number[],
+  offset: number
+): number => {
+  let low = 0
+  let high = starts.length - 1
+  let answer = starts.length - 1
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2)
+    if (starts[mid] + sizes[mid] > offset) {
+      answer = mid
+      high = mid - 1
+    } else {
+      low = mid + 1
+    }
+  }
+  return answer
+}
+
+const findEndIndex = (starts: number[], offset: number): number => {
+  let low = 0
+  let high = starts.length - 1
+  let answer = 0
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2)
+    if (starts[mid] < offset) {
+      answer = mid
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+  return answer
+}
+
+const VirtualizedSessionRows = ({
+  sessions,
+  scrollContainerRef,
+  renderSessionRow,
+  noStarredSection
+}: VirtualizedSessionRowsProps) => {
+  const rowsRef = useRef<HTMLDivElement>(null)
+  const [rowSizes, setRowSizes] = useState<number[]>(() =>
+    sessions.map((_, index) => getEstimatedRowSize(index, sessions.length))
+  )
+  const [viewport, setViewport] = useState({
+    scrollTop: 0,
+    height: 0,
+    rowsOffsetTop: 0
+  })
+
+  useEffect(() => {
+    setRowSizes(previous => {
+      const next = sessions.map(
+        (_, index) => previous[index] ?? getEstimatedRowSize(index, sessions.length)
+      )
+      if (
+        next.length === previous.length &&
+        next.every((value, index) => value === previous[index])
+      ) {
+        return previous
+      }
+      return next
+    })
+  }, [sessions])
+
+  const updateViewport = useCallback((): void => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) {
+      return
+    }
+    const rowsElement = rowsRef.current
+    const next = {
+      scrollTop: scrollContainer.scrollTop,
+      height: scrollContainer.clientHeight,
+      rowsOffsetTop: rowsElement
+        ? getOffsetTopWithin(rowsElement, scrollContainer)
+        : 0
+    }
+    setViewport(previous =>
+      previous.scrollTop === next.scrollTop &&
+      previous.height === next.height &&
+      previous.rowsOffsetTop === next.rowsOffsetTop
+        ? previous
+        : next
+    )
+  }, [scrollContainerRef])
+
+  useEffect(() => {
+    updateViewport()
+  }, [sessions, rowSizes, updateViewport])
+
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) {
+      return
+    }
+    const onScroll = (): void => {
+      updateViewport()
+    }
+    scrollContainer.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', updateViewport)
+
+    return () => {
+      scrollContainer.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', updateViewport)
+    }
+  }, [scrollContainerRef, updateViewport])
+
+  const measurements = useMemo(() => {
+    const starts: number[] = new Array(sessions.length)
+    const sizes: number[] = new Array(sessions.length)
+    let total = 0
+    for (let index = 0; index < sessions.length; index += 1) {
+      starts[index] = total
+      const size = rowSizes[index] ?? getEstimatedRowSize(index, sessions.length)
+      sizes[index] = size
+      total += size
+    }
+    return { starts, sizes, total }
+  }, [sessions, rowSizes])
+
+  if (sessions.length === 0) {
+    return null
+  }
+
+  const shouldVirtualize = sessions.length >= SESSION_VIRTUALIZE_THRESHOLD
+
+  if (!shouldVirtualize) {
+    return (
+      <div
+        ref={rowsRef}
+        className={`session-list-main session-list-main-static ${noStarredSection ? 'session-list-main-no-starred' : ''}`}
+      >
+        {sessions.map(session => renderSessionRow(session))}
+      </div>
+    )
+  }
+
+  const visibleStartOffset = Math.max(
+    0,
+    viewport.scrollTop - viewport.rowsOffsetTop - SESSION_OVERSCAN_PX
+  )
+  const viewportHeight = viewport.height > 0 ? viewport.height : 600
+  const visibleEndOffset =
+    viewport.scrollTop -
+    viewport.rowsOffsetTop +
+    viewportHeight +
+    SESSION_OVERSCAN_PX
+
+  const startIndex = findStartIndex(
+    measurements.starts,
+    measurements.sizes,
+    visibleStartOffset
+  )
+  const endIndex = Math.max(
+    startIndex,
+    findEndIndex(measurements.starts, visibleEndOffset)
+  )
+
+  return (
+    <div
+      ref={rowsRef}
+      className={`session-list-main ${noStarredSection ? 'session-list-main-no-starred' : ''}`}
+      style={{ height: `${measurements.total}px` }}
+    >
+      {sessions.slice(startIndex, endIndex + 1).map((session, offset) => {
+        const index = startIndex + offset
+        return (
+          <div
+            key={session.id}
+            className="virtual-session-row"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              transform: `translateY(${measurements.starts[index]}px)`,
+              paddingBottom: `${index === sessions.length - 1 ? 0 : SESSION_ROW_GAP}px`
+            }}
+            ref={node => {
+              if (!node) {
+                return
+              }
+              const measured = node.offsetHeight
+              if (measured <= 0) {
+                return
+              }
+              setRowSizes(previous => {
+                if (previous[index] === measured) {
+                  return previous
+                }
+                const next = [...previous]
+                next[index] = measured
+                return next
+              })
+            }}
+          >
+            {renderSessionRow(session)}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 const MultiSelectFilter = ({
@@ -136,6 +370,7 @@ export const SessionListSidebar = ({
 }: Props) => {
   const filterRootRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const sessionListRef = useRef<HTMLDivElement>(null)
   const [openMenu, setOpenMenu] = useState<FilterMenu>(null)
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [starredExpanded, setStarredExpanded] = useState(false)
@@ -382,6 +617,7 @@ export const SessionListSidebar = ({
       </div>
 
       <div
+        ref={sessionListRef}
         className={`session-list ${starredMessages.length === 0 ? 'session-list-no-starred' : ''}`}
         role="listbox"
         aria-label="Session list"
@@ -432,7 +668,12 @@ export const SessionListSidebar = ({
             )}
           </section>
         )}
-        {sessions.map(session => renderSessionRow(session))}
+        <VirtualizedSessionRows
+          sessions={sessions}
+          scrollContainerRef={sessionListRef}
+          renderSessionRow={renderSessionRow}
+          noStarredSection={starredMessages.length === 0}
+        />
         {showArchivedSection && (
           <section
             className="archived-search-section"

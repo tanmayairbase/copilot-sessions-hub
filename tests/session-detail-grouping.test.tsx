@@ -95,4 +95,29 @@ describe('SessionDetailView grouping', () => {
     fireEvent.click(screen.getByLabelText('Copy session ID'))
     expect(onCopySessionId).toHaveBeenCalledWith('s1')
   })
+
+  it('shows chunked transcript loading controls for large sessions', () => {
+    const start = new Date('2026-03-11T00:00:00.000Z').getTime()
+    const largeDetail: SessionDetail = {
+      ...detail,
+      id: 's-large',
+      messageCount: 260,
+      messages: Array.from({ length: 260 }).map((_, index) => ({
+        id: `m-large-${index + 1}`,
+        sessionId: 's-large',
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `line ${index + 1}`,
+        format: 'text',
+        timestamp: new Date(start + index * 60_000).toISOString()
+      }))
+    }
+
+    render(<SessionDetailView detail={largeDetail} />)
+    expect(screen.getByText('line 260')).toBeTruthy()
+    expect(screen.queryByText('line 1')).toBeNull()
+    expect(screen.getByText(/Load older messages/)).toBeTruthy()
+
+    fireEvent.click(screen.getByText(/Load older messages/))
+    expect(screen.getByText('line 1')).toBeTruthy()
+  })
 })

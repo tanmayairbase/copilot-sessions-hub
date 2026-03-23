@@ -43,6 +43,14 @@ const starredMessages: StarredMessageSummary[] = [
   }
 ]
 
+const createSession = (id: string, title: string): SessionSummary => ({
+  ...sessions[0],
+  id,
+  title,
+  filePath: `/repos/a/.copilot/session${id}.json`,
+  openVscodeTarget: `/repos/a/.copilot/session${id}.json`
+})
+
 const renderSidebar = (
   overrides: Partial<ComponentProps<typeof SessionListSidebar>> = {}
 ) => {
@@ -225,5 +233,24 @@ describe('SessionListSidebar', () => {
       target: { value: 'only' }
     })
     expect(onStarredFilterChange).toHaveBeenCalledWith('only')
+  })
+
+  it('virtualizes large main session lists while keeping interactions', () => {
+    const largeSessions = Array.from({ length: 180 }, (_, index) =>
+      createSession(String(index + 1), `Session ${index + 1}`)
+    )
+    const { onSelect, onSetArchived } = renderSidebar({
+      sessions: largeSessions
+    })
+
+    expect(screen.getByText('Session 1')).toBeTruthy()
+    expect(screen.queryByText('Session 180')).toBeNull()
+
+    fireEvent.click(screen.getByText('Session 1'))
+    expect(onSelect).toHaveBeenCalledWith('1')
+
+    fireEvent.contextMenu(screen.getByText('Session 1'))
+    fireEvent.click(screen.getByText('Archive session'))
+    expect(onSetArchived).toHaveBeenCalledWith('1', true)
   })
 })

@@ -108,6 +108,8 @@ Config shape:
 {
   "repoRoots": ["/absolute/path/to/repo"],
   "discoveryMode": "both",
+  "syncMode": "manual",
+  "backgroundSyncIntervalMinutes": 10,
   "explicitPatterns": [
     "**/.copilot/**/*.{json,jsonl}",
     "**/.vscode/**/*copilot*.{json,jsonl}",
@@ -119,6 +121,9 @@ Config shape:
 - `discoveryMode: "autodiscovery"` uses built-in patterns.
 - `discoveryMode: "explicit"` uses only `explicitPatterns`.
 - `discoveryMode: "both"` combines both.
+- `syncMode: "manual"` keeps sync user-triggered only.
+- `syncMode: "manual-plus-background"` enables periodic background sync.
+- `backgroundSyncIntervalMinutes` controls periodic sync cadence (1-1440).
 
 Saving settings immediately updates config and triggers a sync.
 

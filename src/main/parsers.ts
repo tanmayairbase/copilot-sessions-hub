@@ -451,6 +451,28 @@ const extractTaskAgentFromToolRequests = (value: unknown): string | null => {
   return null
 }
 
+const extractAgentFromTransformedInstructions = (value: unknown): string | null => {
+  const transformed = firstString(value)
+  if (!transformed || !transformed.includes('<agent_instructions>')) {
+    return null
+  }
+
+  const headingMatch = transformed.match(
+    /<agent_instructions>[\s\S]*?^\s*#\s+([^\n]+)/m
+  )
+  const heading = headingMatch?.[1]?.replace(/[.:]+$/g, '').trim()
+  if (!heading || !/\bagent\b/i.test(heading)) {
+    return null
+  }
+
+  const kebabCaseAgent = heading
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return normalizeAgent(kebabCaseAgent || heading)
+}
+
 const extractEventLogAgent = (
   lines: SessionEvent[],
   sessionStart: SessionEvent | undefined
@@ -495,6 +517,20 @@ const extractEventLogAgent = (
     .find((value): value is string => Boolean(value))
   if (fromAssistantRequests) {
     return fromAssistantRequests
+  }
+
+  const fromTransformedInstructions = lines
+    .map(line => {
+      if (line.type !== 'user.message') {
+        return null
+      }
+      return extractAgentFromTransformedInstructions(
+        line.data?.['transformedContent']
+      )
+    })
+    .find((value): value is string => Boolean(value))
+  if (fromTransformedInstructions) {
+    return fromTransformedInstructions
   }
 
   return normalizeAgent(

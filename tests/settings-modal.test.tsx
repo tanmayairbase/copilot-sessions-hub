@@ -1,16 +1,29 @@
 import React from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppConfig } from '../src/shared/types'
 import { SettingsModal } from '../src/renderer/src/components/SettingsModal'
 
 const baseConfig: AppConfig = {
   repoRoots: ['/Users/me/projects/frontend2'],
   discoveryMode: 'both',
-  explicitPatterns: ['**/.copilot/**/*.json']
+  explicitPatterns: ['**/.copilot/**/*.json'],
+  syncMode: 'manual',
+  backgroundSyncIntervalMinutes: 10
 }
 
 describe('SettingsModal', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   it('saves updated repo roots', async () => {
     const onClose = vi.fn()
     const onSave = vi.fn(async () => undefined)
@@ -34,7 +47,52 @@ describe('SettingsModal', () => {
       expect(onSave).toHaveBeenCalledWith({
         repoRoots: ['/Users/me/projects/airbase-frontend'],
         discoveryMode: 'both',
-        explicitPatterns: ['**/.copilot/**/*.json']
+        explicitPatterns: ['**/.copilot/**/*.json'],
+        syncMode: 'manual',
+        backgroundSyncIntervalMinutes: 10
+      })
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('saves background sync settings', async () => {
+    const onClose = vi.fn()
+    const onSave = vi.fn(async () => undefined)
+
+    render(
+      <SettingsModal
+        isOpen={true}
+        config={baseConfig}
+        onClose={onClose}
+        onSave={onSave}
+      />
+    )
+
+    const dialog = screen.getByRole('dialog', { name: 'Sync settings' })
+
+    fireEvent.change(
+      within(dialog).getByRole('combobox', { name: 'Background sync mode' }),
+      {
+        target: { value: 'manual-plus-background' }
+      }
+    )
+    fireEvent.change(
+      within(dialog).getByRole('spinbutton', {
+        name: 'Background sync interval (minutes)'
+      }),
+      {
+        target: { value: '5' }
+      }
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({
+        repoRoots: ['/Users/me/projects/frontend2'],
+        discoveryMode: 'both',
+        explicitPatterns: ['**/.copilot/**/*.json'],
+        syncMode: 'manual-plus-background',
+        backgroundSyncIntervalMinutes: 5
       })
       expect(onClose).toHaveBeenCalledTimes(1)
     })

@@ -1,11 +1,14 @@
 export type SessionSource = 'cli' | 'vscode' | 'opencode'
 
 export type DiscoveryMode = 'autodiscovery' | 'explicit' | 'both'
+export type SyncMode = 'manual' | 'manual-plus-background'
 
 export interface AppConfig {
   repoRoots: string[]
   discoveryMode: DiscoveryMode
   explicitPatterns: string[]
+  syncMode: SyncMode
+  backgroundSyncIntervalMinutes: number
 }
 
 export interface SessionSummary {

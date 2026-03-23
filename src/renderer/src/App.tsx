@@ -2,6 +2,7 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type MouseEvent as ReactMouseEvent
 } from 'react'
@@ -16,6 +17,7 @@ import type {
 } from '@shared/types'
 import type { DateFilterPreset } from '@shared/format'
 import {
+  formatTimestampIST,
   matchesIstDatePreset,
   matchesRepositoryFilter,
   normalizeModelLabel
@@ -35,6 +37,10 @@ const SIDEBAR_COLLAPSE_MIN_WIDTH = 180
 const SIDEBAR_MAX_WIDTH = 620
 const DETAIL_MIN_WIDTH = 320
 const RESIZER_WIDTH = 6
+const SEARCH_DEBOUNCE_MS = 140
+const DEFAULT_BACKGROUND_SYNC_INTERVAL_MINUTES = 10
+const MIN_BACKGROUND_SYNC_INTERVAL_MINUTES = 1
+const MAX_BACKGROUND_SYNC_INTERVAL_MINUTES = 1440
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value))
@@ -54,6 +60,46 @@ const getSidebarBounds = (
 const uiLog = (message: string, meta?: unknown): void => {
   console.info(`[ui] ${message}`, meta ?? {})
 }
+
+type SyncSource = 'manual' | 'settings-save' | 'background'
+
+interface SyncWaiter {
+  resolve: () => void
+  reject: (error: Error) => void
+}
+
+interface PendingSyncRequest {
+  source: SyncSource
+  waiters: SyncWaiter[]
+}
+
+interface BackgroundSyncStatus {
+  state: 'idle' | 'running' | 'queued' | 'success' | 'error'
+  lastSyncedAt: string | null
+  lastError: string | null
+}
+
+const syncPriority = (source: SyncSource): number => {
+  switch (source) {
+    case 'settings-save':
+      return 3
+    case 'manual':
+      return 2
+    case 'background':
+      return 1
+  }
+}
+
+const normalizeBackgroundIntervalMinutes = (value: number | undefined): number =>
+  Math.max(
+    MIN_BACKGROUND_SYNC_INTERVAL_MINUTES,
+    Math.min(
+      MAX_BACKGROUND_SYNC_INTERVAL_MINUTES,
+      Number.isFinite(value ?? NaN)
+        ? Math.trunc(value as number)
+        : DEFAULT_BACKGROUND_SYNC_INTERVAL_MINUTES
+    )
+  )
 
 export const App = () => {
   const apiRef = useMemo(
@@ -75,6 +121,7 @@ export const App = () => {
   )
   const [focusMessageId, setFocusMessageId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
   const [config, setConfig] = useState<AppConfig | null>(null)
@@ -87,6 +134,19 @@ export const App = () => {
   const [archivedFilter, setArchivedFilter] =
     useState<ArchivedFilterValue>('hide')
   const [starredFilter, setStarredFilter] = useState<StarredFilterValue>('all')
+  const [backgroundSyncStatus, setBackgroundSyncStatus] =
+    useState<BackgroundSyncStatus>({
+      state: 'idle',
+      lastSyncedAt: null,
+      lastError: null
+    })
+  const listRequestIdRef = useRef(0)
+  const hasInitializedSearchEffectRef = useRef(false)
+  const hasLoadedAllStarsRef = useRef(false)
+  const selectedIdRef = useRef<string | null>(null)
+  const searchQueryRef = useRef('')
+  const syncInFlightRef = useRef(false)
+  const queuedSyncRef = useRef<PendingSyncRequest | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const value = Number(
       window.localStorage.getItem(SIDEBAR_WIDTH_KEY) ?? '360'
@@ -104,22 +164,52 @@ export const App = () => {
     return apiRef
   }, [apiRef])
 
+  useEffect(() => {
+    selectedIdRef.current = selectedId
+  }, [selectedId])
+
+  useEffect(() => {
+    searchQueryRef.current = searchQuery
+  }, [searchQuery])
+
   const refreshList = useCallback(
-    async (query: string): Promise<SessionSummary[]> => {
-      uiLog('Refreshing session list', { query })
+    async (
+      query: string,
+      options?: { refreshAllStars?: boolean }
+    ): Promise<SessionSummary[]> => {
+      const startedAt = performance.now()
+      const requestId = ++listRequestIdRef.current
+      const shouldRefreshAllStars =
+        Boolean(options?.refreshAllStars) || !hasLoadedAllStarsRef.current
+      uiLog('Refreshing session list', {
+        query,
+        shouldRefreshAllStars,
+        requestId
+      })
       const api = ensureApi()
-      const rows = await api.listSessions(query)
-      const stars =
+      const [rows, stars, allStars] = await Promise.all([
+        api.listSessions(query),
         typeof api.listStarredMessages === 'function'
-          ? await api.listStarredMessages(query)
-          : []
-      const allStars =
-        typeof api.listStarredMessages === 'function'
-          ? await api.listStarredMessages('')
-          : []
+          ? api.listStarredMessages(query)
+          : Promise.resolve([] as StarredMessageSummary[]),
+        typeof api.listStarredMessages === 'function' && shouldRefreshAllStars
+          ? api.listStarredMessages('')
+          : Promise.resolve<StarredMessageSummary[] | null>(null)
+      ])
+      if (requestId !== listRequestIdRef.current) {
+        uiLog('Discarding stale session list response', {
+          query,
+          requestId,
+          latestRequestId: listRequestIdRef.current
+        })
+        return rows
+      }
       setSessions(rows)
       setStarredMessages(stars)
-      setAllStarredMessages(allStars)
+      if (allStars) {
+        setAllStarredMessages(allStars)
+        hasLoadedAllStarsRef.current = true
+      }
       setSelectedId(previous =>
         rows.some(row => row.id === previous) ? previous : (rows[0]?.id ?? null)
       )
@@ -127,7 +217,8 @@ export const App = () => {
         query,
         count: rows.length,
         stars: stars.length,
-        allStars: allStars.length
+        allStars: allStars?.length ?? 'cached',
+        durationMs: Math.round(performance.now() - startedAt)
       })
       return rows
     },
@@ -168,7 +259,7 @@ export const App = () => {
           repoRoots: loadedConfig.repoRoots.length,
           discoveryMode: loadedConfig.discoveryMode
         })
-        await refreshList('')
+        await refreshList('', { refreshAllStars: true })
       } catch (error) {
         const message = `Init failed: ${(error as Error).message}`
         setToast(message)
@@ -196,10 +287,30 @@ export const App = () => {
   }, [ensureApi, selectedId])
 
   useEffect(() => {
-    void refreshList(searchQuery).catch(error => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [searchQuery])
+
+  useEffect(() => {
+    if (!hasInitializedSearchEffectRef.current) {
+      hasInitializedSearchEffectRef.current = true
+      return
+    }
+
+    const startedAt = performance.now()
+    void refreshList(debouncedSearchQuery).then(() => {
+      uiLog('Search refresh completed', {
+        query: debouncedSearchQuery,
+        durationMs: Math.round(performance.now() - startedAt)
+      })
+    }).catch(error => {
       setToast(`Search failed: ${(error as Error).message}`)
     })
-  }, [refreshList, searchQuery])
+  }, [debouncedSearchQuery, refreshList])
 
   const repositoryOptions = useMemo(
     () => (config?.repoRoots ?? []).slice().sort((a, b) => a.localeCompare(b)),
@@ -404,18 +515,17 @@ export const App = () => {
           )
         }
         await api.setMessageStarred(sessionId, messageId, starred)
-        const detail = await api.getSessionDetail(sessionId)
+        const [detail] = await Promise.all([
+          api.getSessionDetail(sessionId),
+          refreshList(searchQuery, { refreshAllStars: true })
+        ])
         setSelectedDetail(detail)
-        const stars = await api.listStarredMessages(searchQuery)
-        const allStars = await api.listStarredMessages('')
-        setStarredMessages(stars)
-        setAllStarredMessages(allStars)
         setToast(starred ? 'Message starred.' : 'Message unstarred.')
       } catch (error) {
         setToast(`Failed to update star state: ${(error as Error).message}`)
       }
     },
-    [ensureApi, searchQuery]
+    [ensureApi, refreshList, searchQuery]
   )
 
   const onSelectStarredMessage = useCallback(
@@ -426,33 +536,201 @@ export const App = () => {
     []
   )
 
-  const onSync = async (): Promise<void> => {
-    setIsSyncing(true)
-    uiLog('Starting sync from UI')
+  const runSync = useCallback(
+    async (source: SyncSource): Promise<void> => {
+      const isBackground = source === 'background'
+      if (isBackground) {
+        setBackgroundSyncStatus(current => ({
+          ...current,
+          state: 'running'
+        }))
+      } else {
+        setIsSyncing(true)
+      }
+
+      uiLog('Starting sync from UI', { source })
+
+      try {
+        const result = await ensureApi().syncSessions()
+        setSyncResult(result)
+        const rows = await refreshList(searchQueryRef.current, {
+          refreshAllStars: true
+        })
+        await refreshSelectedDetailIfPresent(selectedIdRef.current, rows)
+
+        if (source === 'manual') {
+          setToast(
+            `Sync complete: ${result.sessionsImported} sessions imported from ${result.filesScanned} files.`
+          )
+        } else if (source === 'settings-save') {
+          setToast(
+            `Config saved and synced: ${result.sessionsImported} sessions imported from ${result.filesScanned} files.`
+          )
+        } else {
+          setBackgroundSyncStatus({
+            state: 'success',
+            lastSyncedAt: new Date().toISOString(),
+            lastError: null
+          })
+        }
+
+        uiLog('Sync completed in UI', { source, result })
+      } catch (error) {
+        const reason = (error as Error).message
+        if (isBackground) {
+          setBackgroundSyncStatus(current => ({
+            ...current,
+            state: 'error',
+            lastError: reason
+          }))
+          setToast(`Background sync failed: ${reason}`)
+        } else {
+          if (source === 'manual') {
+            const message = `Sync failed: ${reason}`
+            setToast(message)
+            uiLog('Sync failed in UI', { source, message })
+          } else {
+            uiLog('Sync failed in UI', { source, message: reason })
+          }
+        }
+        throw error
+      } finally {
+        if (!isBackground) {
+          setIsSyncing(false)
+        }
+      }
+    },
+    [ensureApi, refreshList, refreshSelectedDetailIfPresent]
+  )
+
+  const requestSync = useCallback(
+    (source: SyncSource): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        const waiter: SyncWaiter = {
+          resolve,
+          reject
+        }
+
+        if (syncInFlightRef.current) {
+          if (source === 'background') {
+            setBackgroundSyncStatus(current => ({
+              ...current,
+              state: 'running'
+            }))
+            resolve()
+            return
+          }
+
+          const queued = queuedSyncRef.current
+          if (!queued) {
+            queuedSyncRef.current = { source, waiters: [waiter] }
+          } else if (syncPriority(source) > syncPriority(queued.source)) {
+            queuedSyncRef.current = {
+              source,
+              waiters: [...queued.waiters, waiter]
+            }
+          } else {
+            queued.waiters.push(waiter)
+          }
+
+          if (queuedSyncRef.current?.source !== 'background') {
+            setBackgroundSyncStatus(current => {
+              if (current.state !== 'queued') {
+                return current
+              }
+              return {
+                ...current,
+                state: 'running'
+              }
+            })
+          }
+          setIsSyncing(true)
+          return
+        }
+
+        const runQueued = async (
+          initialRequest: PendingSyncRequest
+        ): Promise<void> => {
+          let currentRequest: PendingSyncRequest | null = initialRequest
+          while (currentRequest) {
+            syncInFlightRef.current = true
+            try {
+              await runSync(currentRequest.source)
+              for (const currentWaiter of currentRequest.waiters) {
+                currentWaiter.resolve()
+              }
+            } catch (error) {
+              const normalizedError =
+                error instanceof Error ? error : new Error(String(error))
+              for (const currentWaiter of currentRequest.waiters) {
+                currentWaiter.reject(normalizedError)
+              }
+            } finally {
+              syncInFlightRef.current = false
+            }
+            currentRequest = queuedSyncRef.current
+            queuedSyncRef.current = null
+          }
+        }
+
+        void runQueued({
+          source,
+          waiters: [waiter]
+        })
+      })
+    },
+    [runSync]
+  )
+
+  const onSync = useCallback(async (): Promise<void> => {
     try {
-      const result = await ensureApi().syncSessions()
-      setSyncResult(result)
-      const rows = await refreshList(searchQuery)
-      await refreshSelectedDetailIfPresent(selectedId, rows)
-      setToast(
-        `Sync complete: ${result.sessionsImported} sessions imported from ${result.filesScanned} files.`
-      )
-      uiLog('Sync completed in UI', result)
+      await requestSync('manual')
     } catch (error) {
-      const message = `Sync failed: ${(error as Error).message}`
-      setToast(message)
-      uiLog('Sync failed in UI', { message })
-    } finally {
-      setIsSyncing(false)
+      uiLog('Manual sync request failed', {
+        message: (error as Error).message
+      })
     }
-  }
+  }, [requestSync])
+
+  useEffect(() => {
+    if (!config || config.syncMode !== 'manual-plus-background') {
+      setBackgroundSyncStatus(current => ({
+        ...current,
+        state: 'idle'
+      }))
+      return
+    }
+
+    const intervalMinutes = normalizeBackgroundIntervalMinutes(
+      config.backgroundSyncIntervalMinutes
+    )
+    const intervalMs = intervalMinutes * 60_000
+    uiLog('Background sync scheduler enabled', {
+      intervalMinutes
+    })
+
+    const timer = window.setInterval(() => {
+      void requestSync('background').catch(error => {
+        uiLog('Background sync request failed', {
+          message: (error as Error).message
+        })
+      })
+    }, intervalMs)
+
+    return () => {
+      window.clearInterval(timer)
+      uiLog('Background sync scheduler disabled')
+    }
+  }, [config, requestSync])
 
   const onSaveConfig = async (next: AppConfig): Promise<void> => {
     try {
       uiLog('Saving config from settings modal', {
         repoRoots: next.repoRoots.length,
         discoveryMode: next.discoveryMode,
-        explicitPatterns: next.explicitPatterns.length
+        explicitPatterns: next.explicitPatterns.length,
+        syncMode: next.syncMode,
+        backgroundSyncIntervalMinutes: next.backgroundSyncIntervalMinutes
       })
       const saved = await ensureApi().saveConfig(next)
       setConfig(saved)
@@ -460,13 +738,7 @@ export const App = () => {
       uiLog('Config saved, triggering sync', {
         repoRoots: saved.repoRoots.length
       })
-      const result = await ensureApi().syncSessions()
-      setSyncResult(result)
-      const rows = await refreshList(searchQuery)
-      await refreshSelectedDetailIfPresent(selectedId, rows)
-      setToast(
-        `Config saved and synced: ${result.sessionsImported} sessions imported from ${result.filesScanned} files.`
-      )
+      await requestSync('settings-save')
     } catch (error) {
       const message = `Config save failed: ${(error as Error).message}`
       setToast(message)
@@ -542,6 +814,24 @@ export const App = () => {
     }
     return `${syncResult.errors.length} file errors captured during sync.`
   }, [syncResult])
+  const backgroundStatusText = useMemo(() => {
+    if (!config || config.syncMode !== 'manual-plus-background') {
+      return null
+    }
+    if (backgroundSyncStatus.state === 'running') {
+      return 'Background sync running...'
+    }
+    if (backgroundSyncStatus.state === 'queued') {
+      return 'Background sync queued...'
+    }
+    if (backgroundSyncStatus.state === 'error' && backgroundSyncStatus.lastError) {
+      return `Background sync failed: ${backgroundSyncStatus.lastError}`
+    }
+    if (backgroundSyncStatus.lastSyncedAt) {
+      return `Background sync: ${formatTimestampIST(backgroundSyncStatus.lastSyncedAt)}`
+    }
+    return 'Background sync enabled'
+  }, [backgroundSyncStatus, config])
   const hasActiveFilters =
     selectedRepos.length > 0 ||
     selectedModels.length > 0 ||
@@ -628,7 +918,7 @@ export const App = () => {
         />
       </main>
 
-      {(syncResult || toast) && (
+      {(syncResult || toast || backgroundStatusText) && (
         <footer className="statusbar">
           {toast && <span>{toast}</span>}
           {syncResult && (
@@ -639,6 +929,7 @@ export const App = () => {
             </span>
           )}
           {syncErrors && <span>{syncErrors}</span>}
+          {backgroundStatusText && <span>{backgroundStatusText}</span>}
         </footer>
       )}
 

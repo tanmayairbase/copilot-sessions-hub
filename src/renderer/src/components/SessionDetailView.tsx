@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import AnsiToHtml from 'ansi-to-html'
 import { marked } from 'marked'
 import type { SessionDetail, SessionMessage } from '@shared/types'
@@ -26,6 +26,7 @@ const renderAssistantContent = (content: string): string => {
 
 const renderUserContent = (content: string): string =>
   marked.parse(content, { breaks: true }) as string
+const DETAIL_CHUNK_SIZE = 220
 
 interface Props {
   detail: SessionDetail | null
@@ -133,6 +134,30 @@ export const SessionDetailView = ({
   focusMessageId,
   onFocusedMessageConsumed
 }: Props) => {
+  const groupedMessages = useMemo(
+    () => groupMessagesByMinute(detail?.messages ?? []),
+    [detail]
+  )
+  const [visibleCount, setVisibleCount] = useState(DETAIL_CHUNK_SIZE)
+
+  useEffect(() => {
+    if (!detail) {
+      return
+    }
+    if (groupedMessages.length <= DETAIL_CHUNK_SIZE) {
+      setVisibleCount(groupedMessages.length)
+      return
+    }
+    setVisibleCount(DETAIL_CHUNK_SIZE)
+  }, [detail, groupedMessages.length])
+
+  const visibleMessages = useMemo(() => {
+    if (groupedMessages.length <= visibleCount) {
+      return groupedMessages
+    }
+    return groupedMessages.slice(groupedMessages.length - visibleCount)
+  }, [groupedMessages, visibleCount])
+
   useEffect(() => {
     if (!focusMessageId) {
       return
@@ -148,6 +173,9 @@ export const SessionDetailView = ({
           .includes(focusMessageId)
       ) ?? null
     if (!target) {
+      if (groupedMessages.length > visibleCount) {
+        setVisibleCount(groupedMessages.length)
+      }
       return
     }
     target.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -156,7 +184,13 @@ export const SessionDetailView = ({
       target.classList.remove('message-focused')
     }, 1200)
     onFocusedMessageConsumed?.()
-  }, [focusMessageId, onFocusedMessageConsumed])
+  }, [
+    detail,
+    focusMessageId,
+    groupedMessages.length,
+    onFocusedMessageConsumed,
+    visibleCount
+  ])
 
   if (!detail) {
     return (
@@ -197,7 +231,21 @@ export const SessionDetailView = ({
       </header>
 
       <div className="message-thread">
-        {groupMessagesByMinute(detail.messages).map(message => (
+        {groupedMessages.length > visibleMessages.length ? (
+          <button
+            type="button"
+            className="message-load-older"
+            onClick={() =>
+              setVisibleCount(current =>
+                Math.min(groupedMessages.length, current + DETAIL_CHUNK_SIZE)
+              )
+            }
+          >
+            Load older messages (
+            {groupedMessages.length - visibleMessages.length} remaining)
+          </button>
+        ) : null}
+        {visibleMessages.map(message => (
           <article
             key={message.id}
             className={`message ${message.role === 'user' ? 'message-user' : 'message-assistant'}`}

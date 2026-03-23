@@ -4,6 +4,7 @@ import type {
   MessageStarRecord,
   SessionDetail,
   SessionMessage,
+  SessionSource,
   SessionSummary,
   StarredMessageSummary
 } from '../shared/types'
@@ -12,6 +13,17 @@ import { logError, logInfo, logWarn } from './logger'
 export interface SessionInsert {
   session: SessionSummary
   messages: SessionMessage[]
+}
+
+export interface ArtifactSyncCacheEntry {
+  filePath: string
+  mtimeMs: number
+  size: number
+  repoRoot: string
+  source: SessionSource
+  cliSummaryToken: string
+  parserVersion: number
+  inserts: SessionInsert[]
 }
 
 export interface MergeSyncResult {
@@ -25,12 +37,14 @@ interface PersistedStore {
   sessions: SessionSummary[]
   messages: SessionMessage[]
   stars: MessageStarRecord[]
+  artifacts: ArtifactSyncCacheEntry[]
 }
 
 const emptyStore = (): PersistedStore => ({
   sessions: [],
   messages: [],
-  stars: []
+  stars: [],
+  artifacts: []
 })
 const ARCHIVE_PRUNE_MONTHS = 4
 
@@ -83,6 +97,31 @@ const normalizeStarRecord = (star: MessageStarRecord): MessageStarRecord => {
   }
 }
 
+const normalizeArtifactSyncCacheEntry = (
+  entry: ArtifactSyncCacheEntry
+): ArtifactSyncCacheEntry => ({
+  filePath: typeof entry.filePath === 'string' ? entry.filePath : '',
+  mtimeMs: Number.isFinite(entry.mtimeMs) ? entry.mtimeMs : 0,
+  size: Number.isFinite(entry.size) ? entry.size : 0,
+  repoRoot: typeof entry.repoRoot === 'string' ? entry.repoRoot : '',
+  source:
+    entry.source === 'vscode' || entry.source === 'opencode'
+      ? entry.source
+      : 'cli',
+  cliSummaryToken:
+    typeof entry.cliSummaryToken === 'string' ? entry.cliSummaryToken : '',
+  parserVersion:
+    Number.isFinite(entry.parserVersion) && entry.parserVersion > 0
+      ? Math.trunc(entry.parserVersion)
+      : 0,
+  inserts: Array.isArray(entry.inserts)
+    ? entry.inserts.map(row => ({
+        session: normalizeSessionSummary(row.session),
+        messages: Array.isArray(row.messages) ? row.messages : []
+      }))
+    : []
+})
+
 const subtractMonthsUtc = (value: string, months: number): Date => {
   const date = new Date(value)
   date.setUTCMonth(date.getUTCMonth() - months)
@@ -91,10 +130,18 @@ const subtractMonthsUtc = (value: string, months: number): Date => {
 
 export class SessionStorage {
   private store: PersistedStore
+  private sessionById = new Map<string, SessionSummary>()
+  private messagesBySession = new Map<string, SessionMessage[]>()
+  private messageLookupBySession = new Map<string, Map<string, SessionMessage>>()
+  private starsBySession = new Map<string, MessageStarRecord[]>()
+  private searchIndexBySession = new Map<string, string>()
+  private detailCache = new Map<string, SessionDetail>()
+  private readonly detailCacheLimit = 24
 
   constructor(private readonly storagePath: string) {
     logInfo('Initializing session storage', { storagePath })
     this.store = this.load()
+    this.rebuildDerivedState()
   }
 
   private load(): PersistedStore {
@@ -123,12 +170,19 @@ export class SessionStorage {
           normalizeSessionSummary(session)
         ),
         messages: parsed.messages,
-        stars: parsedStars
+        stars: parsedStars,
+        artifacts: Array.isArray((parsed as { artifacts?: unknown }).artifacts)
+          ? (
+              (parsed as { artifacts?: ArtifactSyncCacheEntry[] }).artifacts ??
+              []
+            ).map(entry => normalizeArtifactSyncCacheEntry(entry))
+          : []
       }
       logInfo('Storage loaded', {
         sessions: normalized.sessions.length,
         messages: normalized.messages.length,
-        stars: normalized.stars.length
+        stars: normalized.stars.length,
+        artifacts: normalized.artifacts.length
       })
       return normalized
     } catch (error) {
@@ -151,8 +205,89 @@ export class SessionStorage {
       storagePath: this.storagePath,
       sessions: this.store.sessions.length,
       messages: this.store.messages.length,
-      stars: this.store.stars.length
+      stars: this.store.stars.length,
+      artifacts: this.store.artifacts.length
     })
+  }
+
+  private buildSearchHaystack(session: SessionSummary): string {
+    const messages = this.messagesBySession.get(session.id) ?? []
+    return [
+      session.id,
+      session.title,
+      session.repoPath,
+      session.agent ?? '',
+      session.model ?? '',
+      ...messages.map(message => message.content)
+    ]
+      .join('\n')
+      .toLowerCase()
+  }
+
+  private rebuildDerivedState(): void {
+    this.sessionById = new Map(
+      this.store.sessions.map(session => [session.id, session])
+    )
+    this.messagesBySession = new Map()
+    this.messageLookupBySession = new Map()
+    for (const message of this.store.messages) {
+      const rows = this.messagesBySession.get(message.sessionId) ?? []
+      rows.push(message)
+      this.messagesBySession.set(message.sessionId, rows)
+    }
+    for (const [sessionId, rows] of this.messagesBySession.entries()) {
+      rows.sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      )
+      this.messageLookupBySession.set(
+        sessionId,
+        new Map(rows.map(message => [message.id, message]))
+      )
+    }
+
+    this.starsBySession = new Map()
+    for (const star of this.store.stars) {
+      const rows = this.starsBySession.get(star.sessionId) ?? []
+      rows.push(star)
+      this.starsBySession.set(star.sessionId, rows)
+    }
+    for (const rows of this.starsBySession.values()) {
+      rows.sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )
+    }
+
+    this.searchIndexBySession = new Map()
+    for (const session of this.store.sessions) {
+      this.searchIndexBySession.set(session.id, this.buildSearchHaystack(session))
+    }
+    this.detailCache.clear()
+  }
+
+  private refreshSessionSearchIndex(sessionId: string): void {
+    const session = this.sessionById.get(sessionId)
+    if (!session) {
+      this.searchIndexBySession.delete(sessionId)
+      return
+    }
+    this.searchIndexBySession.set(sessionId, this.buildSearchHaystack(session))
+  }
+
+  private setDetailCache(detail: SessionDetail): void {
+    if (this.detailCache.has(detail.id)) {
+      this.detailCache.delete(detail.id)
+    }
+    this.detailCache.set(detail.id, detail)
+    if (this.detailCache.size <= this.detailCacheLimit) {
+      return
+    }
+    const oldestKey = this.detailCache.keys().next().value as string | undefined
+    if (!oldestKey) {
+      return
+    }
+    this.detailCache.delete(oldestKey)
   }
 
   private reconcileStars(
@@ -209,12 +344,24 @@ export class SessionStorage {
       sessionsById,
       messagesBySession
     )
+    this.store.artifacts = []
+    this.rebuildDerivedState()
     this.persist()
+  }
+
+  getArtifactSyncCache(): Map<string, ArtifactSyncCacheEntry> {
+    return new Map(
+      this.store.artifacts.map(entry => [
+        entry.filePath,
+        normalizeArtifactSyncCacheEntry(entry)
+      ])
+    )
   }
 
   mergeFromSync(
     rows: SessionInsert[],
-    syncedAt = new Date().toISOString()
+    syncedAt = new Date().toISOString(),
+    artifactCache?: ArtifactSyncCacheEntry[]
   ): MergeSyncResult {
     logInfo('Merging sync rows into storage', { rows: rows.length, syncedAt })
 
@@ -303,11 +450,17 @@ export class SessionStorage {
 
     this.store.sessions = [...nextSessionsById.values()]
     this.store.messages = [...nextMessagesBySession.values()].flat()
+    if (artifactCache) {
+      this.store.artifacts = artifactCache
+        .map(entry => normalizeArtifactSyncCacheEntry(entry))
+        .sort((a, b) => a.filePath.localeCompare(b.filePath))
+    }
     this.store.stars = this.reconcileStars(
       this.store.stars,
       nextSessionsById,
       nextMessagesBySession
     )
+    this.rebuildDerivedState()
     this.persist()
 
     const archivedSessions = this.store.sessions.filter(
@@ -331,37 +484,25 @@ export class SessionStorage {
   }
 
   list(query: string): SessionSummary[] {
+    const startedAt = performance.now()
     const trimmed = query.trim()
     if (!trimmed) {
       const results = [...this.store.sessions].sort(
         (a, b) =>
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       )
-      logInfo('Listed sessions without query', { count: results.length })
+      logInfo('Listed sessions without query', {
+        count: results.length,
+        durationMs: Math.round(performance.now() - startedAt)
+      })
       return results
     }
 
     const needle = normalize(trimmed)
-    const messageBySession = new Map<string, string[]>()
-    for (const message of this.store.messages) {
-      const rows = messageBySession.get(message.sessionId) ?? []
-      rows.push(message.content)
-      messageBySession.set(message.sessionId, rows)
-    }
-
     const results = this.store.sessions
       .filter(session => {
-        const haystack = [
-          session.id,
-          session.title,
-          session.repoPath,
-          session.agent ?? '',
-          session.model ?? '',
-          ...(messageBySession.get(session.id) ?? [])
-        ]
-          .join('\n')
-          .toLowerCase()
-        return haystack.includes(needle)
+        const haystack = this.searchIndexBySession.get(session.id)
+        return Boolean(haystack?.includes(needle))
       })
       .sort(
         (a, b) =>
@@ -369,61 +510,68 @@ export class SessionStorage {
       )
     logInfo('Listed sessions with query', {
       query: trimmed,
-      count: results.length
+      count: results.length,
+      durationMs: Math.round(performance.now() - startedAt)
     })
     return results
   }
 
   getSessionDetail(sessionId: string): SessionDetail | null {
-    const session = this.store.sessions.find(row => row.id === sessionId)
+    const startedAt = performance.now()
+    const cached = this.detailCache.get(sessionId)
+    if (cached) {
+      this.detailCache.delete(sessionId)
+      this.detailCache.set(sessionId, cached)
+      logInfo('Loaded session detail from cache', {
+        sessionId,
+        messages: cached.messages.length,
+        durationMs: Math.round(performance.now() - startedAt)
+      })
+      return cached
+    }
+
+    const session = this.sessionById.get(sessionId)
     if (!session) {
       logWarn('Session detail not found', { sessionId })
       return null
     }
 
     const starredMessageIds = new Set(
-      this.store.stars
-        .filter(star => star.sessionId === sessionId && !star.stale)
+      (this.starsBySession.get(sessionId) ?? [])
+        .filter(star => !star.stale)
         .map(star => star.messageId)
     )
 
-    const messages = this.store.messages
-      .filter(row => row.sessionId === sessionId)
-      .sort(
-        (a, b) =>
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      )
+    const messages = (this.messagesBySession.get(sessionId) ?? [])
       .map(message => ({
         ...message,
         userStarred: starredMessageIds.has(message.id)
       }))
 
-    logInfo('Loaded session detail', { sessionId, messages: messages.length })
-    return { ...session, messages }
+    const detail = { ...session, messages }
+    this.setDetailCache(detail)
+    logInfo('Loaded session detail', {
+      sessionId,
+      messages: messages.length,
+      durationMs: Math.round(performance.now() - startedAt)
+    })
+    return detail
   }
 
   listStarredMessages(query: string): StarredMessageSummary[] {
-    const sessionsById = new Map(
-      this.store.sessions.map(session => [session.id, session])
-    )
-    const messagesBySession = new Map<string, SessionMessage[]>()
-    for (const message of this.store.messages) {
-      const entries = messagesBySession.get(message.sessionId) ?? []
-      entries.push(message)
-      messagesBySession.set(message.sessionId, entries)
-    }
+    const startedAt = performance.now()
 
     const rows: StarredMessageSummary[] = []
     for (const star of this.store.stars.map(entry =>
       normalizeStarRecord(entry)
     )) {
-      const session = sessionsById.get(star.sessionId)
+      const session = this.sessionById.get(star.sessionId)
       if (!session) {
         continue
       }
-      const liveMessage = (messagesBySession.get(star.sessionId) ?? []).find(
-        message => message.id === star.messageId
-      )
+      const liveMessage = this.messageLookupBySession
+        .get(star.sessionId)
+        ?.get(star.messageId)
       rows.push({
         sessionId: star.sessionId,
         messageId: star.messageId,
@@ -454,10 +602,16 @@ export class SessionStorage {
             .includes(trimmed)
         )
       : rows
-    return filtered.sort(
+    const sorted = filtered.sort(
       (a, b) =>
         new Date(b.starredAt).getTime() - new Date(a.starredAt).getTime()
     )
+    logInfo('Listed starred messages', {
+      query: query.trim(),
+      count: sorted.length,
+      durationMs: Math.round(performance.now() - startedAt)
+    })
+    return sorted
   }
 
   setArchived(sessionId: string, archived: boolean): SessionSummary | null {
@@ -477,6 +631,9 @@ export class SessionStorage {
       userArchivedAt: archived ? new Date().toISOString() : undefined
     })
     this.store.sessions[index] = next
+    this.sessionById.set(sessionId, next)
+    this.refreshSessionSearchIndex(sessionId)
+    this.detailCache.delete(sessionId)
     this.persist()
     logInfo('Updated session archive state', { sessionId, archived })
     return next
@@ -510,6 +667,8 @@ export class SessionStorage {
         return null
       }
       this.store.stars.splice(index, 1)
+      this.rebuildDerivedState()
+      this.detailCache.delete(sessionId)
       this.persist()
       logInfo('Updated message star state', { sessionId, messageId, starred })
       return null
@@ -546,6 +705,8 @@ export class SessionStorage {
     } else {
       this.store.stars.push(next)
     }
+    this.rebuildDerivedState()
+    this.detailCache.delete(sessionId)
     this.persist()
     logInfo('Updated message star state', { sessionId, messageId, starred })
     return next
