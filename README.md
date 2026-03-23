@@ -21,7 +21,6 @@ Desktop Electron app (TypeScript + Node 24) that aggregates Copilot sessions fro
 - **Read-only** session detail transcript (no in-app chatting/editing).
 - Session metadata with model + timestamp formatting as `MMM DD, YYYY HH:mm IST`.
 - Settings UI plus editable JSON config file.
-- Custom robot app icon for macOS dock and packaged app.
 
 ## Prerequisites
 
