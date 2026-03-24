@@ -120,4 +120,41 @@ describe('SessionDetailView grouping', () => {
     fireEvent.click(screen.getByText(/Load older messages/))
     expect(screen.getByText('line 1')).toBeTruthy()
   })
+
+  it('renders transcript links as external browser links', () => {
+    const linkedDetail: SessionDetail = {
+      ...detail,
+      messages: [
+        {
+          id: 'm-link-a',
+          sessionId: 's1',
+          role: 'assistant',
+          content: 'See [PR #42](https://github.com/org/repo/pull/42).',
+          format: 'markdown',
+          timestamp: '2026-03-11T10:03:00.000Z'
+        },
+        {
+          id: 'm-link-u',
+          sessionId: 's1',
+          role: 'user',
+          content: 'Reference https://example.com/docs for context.',
+          format: 'markdown',
+          timestamp: '2026-03-11T10:04:00.000Z'
+        }
+      ]
+    }
+
+    render(<SessionDetailView detail={linkedDetail} />)
+
+    const links = screen.getAllByRole('link')
+    expect(links).toHaveLength(2)
+    expect(links[0].getAttribute('href')).toBe(
+      'https://github.com/org/repo/pull/42'
+    )
+    expect(links[0].getAttribute('target')).toBe('_blank')
+    expect(links[0].getAttribute('rel')).toBe('noopener noreferrer')
+    expect(links[1].getAttribute('href')).toBe('https://example.com/docs')
+    expect(links[1].getAttribute('target')).toBe('_blank')
+    expect(links[1].getAttribute('rel')).toBe('noopener noreferrer')
+  })
 })

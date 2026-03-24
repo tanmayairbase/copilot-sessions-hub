@@ -1,8 +1,9 @@
 import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
 import { ConfigService } from './config'
+import { registerExternalLinkHandlers } from './external-links'
 import { registerIpcHandlers } from './ipc'
 import { initializeLogger, logInfo, logWarn } from './logger'
 import { SessionStorage } from './storage'
@@ -95,6 +96,7 @@ const createWindow = async (): Promise<void> => {
       nodeIntegration: false
     }
   })
+  registerExternalLinkHandlers(window.webContents, url => shell.openExternal(url))
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     await window.loadURL(process.env['ELECTRON_RENDERER_URL'])

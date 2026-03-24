@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import AnsiToHtml from 'ansi-to-html'
 import { marked } from 'marked'
+import { normalizeExternalUrl } from '@shared/links'
 import type { SessionDetail, SessionMessage } from '@shared/types'
 import {
   formatMinuteKeyIST,
@@ -16,16 +17,43 @@ const ansiConverter = new AnsiToHtml({
   escapeXML: true
 })
 
+const normalizeRenderedLinks = (html: string): string => {
+  if (typeof document === 'undefined') {
+    return html
+  }
+
+  const template = document.createElement('template')
+  template.innerHTML = html
+
+  for (const link of template.content.querySelectorAll<HTMLAnchorElement>(
+    'a[href]'
+  )) {
+    const normalized = normalizeExternalUrl(link.getAttribute('href') ?? '')
+    if (!normalized) {
+      link.replaceWith(document.createTextNode(link.textContent ?? ''))
+      continue
+    }
+
+    link.setAttribute('href', normalized)
+    link.setAttribute('target', '_blank')
+    link.setAttribute('rel', 'noopener noreferrer')
+  }
+
+  return template.innerHTML
+}
+
+const renderMarkdownContent = (content: string): string =>
+  normalizeRenderedLinks(marked.parse(content, { breaks: true }) as string)
+
 const renderAssistantContent = (content: string): string => {
   if (content.includes('\u001b[')) {
     return `<pre class="ansi-output">${ansiConverter.toHtml(content)}</pre>`
   }
 
-  return marked.parse(content, { breaks: true }) as string
+  return renderMarkdownContent(content)
 }
 
-const renderUserContent = (content: string): string =>
-  marked.parse(content, { breaks: true }) as string
+const renderUserContent = (content: string): string => renderMarkdownContent(content)
 const DETAIL_CHUNK_SIZE = 220
 
 interface Props {
