@@ -2,6 +2,9 @@
 
 Desktop Electron app (TypeScript + Node 24) that aggregates Copilot sessions from multiple repositories, provides full-text search in a resizable left sidebar, and renders selected session details in a chat-style main pane.
 
+<img width="1398" height="901" alt="image" src="https://github.com/user-attachments/assets/274fa0f2-f7e5-48ab-b15c-183f029b8f09" />
+
+
 ## Features
 
 - Sync sessions from configurable repository roots.
