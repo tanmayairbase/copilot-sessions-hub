@@ -1,5 +1,5 @@
 import React from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionDetail } from '../src/shared/types'
 import { SessionDetailView } from '../src/renderer/src/components/SessionDetailView'
@@ -121,6 +121,29 @@ describe('SessionDetailView grouping', () => {
     expect(screen.getByText('line 1')).toBeTruthy()
   })
 
+  it('scrolls to the top when switching sessions', async () => {
+    const nextDetail: SessionDetail = {
+      ...detail,
+      id: 's2',
+      title: 'Second session',
+      messages: detail.messages.map(message => ({
+        ...message,
+        id: `${message.id}-s2`,
+        sessionId: 's2'
+      }))
+    }
+
+    const { container, rerender } = render(<SessionDetailView detail={detail} />)
+    const thread = container.querySelector('.message-thread') as HTMLDivElement
+
+    thread.scrollTop = 275
+    rerender(<SessionDetailView detail={nextDetail} />)
+
+    await waitFor(() => {
+      expect(thread.scrollTop).toBe(0)
+    })
+  })
+
   it('renders transcript links as external browser links', () => {
     const linkedDetail: SessionDetail = {
       ...detail,
@@ -156,5 +179,45 @@ describe('SessionDetailView grouping', () => {
     expect(links[1].getAttribute('href')).toBe('https://example.com/docs')
     expect(links[1].getAttribute('target')).toBe('_blank')
     expect(links[1].getAttribute('rel')).toBe('noopener noreferrer')
+  })
+
+  it('keeps same-minute user messages separate when their modes differ', () => {
+    const modeDetail: SessionDetail = {
+      ...detail,
+      id: 's-mode',
+      modes: ['plan', 'autopilot'],
+      latestMode: 'autopilot',
+      messages: [
+        {
+          id: 'm-plan',
+          sessionId: 's-mode',
+          role: 'user',
+          mode: 'plan',
+          content: 'Draft the plan first.',
+          format: 'text',
+          timestamp: '2026-03-11T10:01:00.000Z'
+        },
+        {
+          id: 'm-auto',
+          sessionId: 's-mode',
+          role: 'user',
+          mode: 'autopilot',
+          content: 'Now implement it.',
+          format: 'text',
+          timestamp: '2026-03-11T10:01:30.000Z'
+        }
+      ]
+    }
+
+    render(<SessionDetailView detail={modeDetail} />)
+
+    expect(screen.getAllByLabelText('user message')).toHaveLength(2)
+    expect(screen.queryByText(/^Mode:$/)).toBeNull()
+    expect(
+      screen.getByText('Draft the plan first.').closest('article')?.className
+    ).toContain('message-mode-plan')
+    expect(
+      screen.getByText('Now implement it.').closest('article')?.className
+    ).toContain('message-mode-autopilot')
   })
 })

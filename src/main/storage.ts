@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import type {
   MessageStarRecord,
   SessionDetail,
+  SessionExecutionMode,
   SessionMessage,
   SessionSource,
   SessionSummary,
@@ -49,6 +50,24 @@ const emptyStore = (): PersistedStore => ({
 const ARCHIVE_PRUNE_MONTHS = 4
 
 const normalize = (value: string): string => value.toLowerCase()
+const normalizeExecutionMode = (
+  value: unknown
+): SessionExecutionMode | null => {
+  return value === 'plan' || value === 'autopilot' ? value : null
+}
+
+const normalizeExecutionModes = (
+  values: SessionSummary['modes']
+): SessionExecutionMode[] | undefined => {
+  if (!Array.isArray(values)) {
+    return undefined
+  }
+  const normalized = values
+    .map(value => normalizeExecutionMode(value))
+    .filter((value): value is SessionExecutionMode => Boolean(value))
+  return normalized.length > 0 ? [...new Set(normalized)] : undefined
+}
+
 const ensureIso = (value: string | undefined, fallback: string): string => {
   if (!value) {
     return fallback
@@ -64,6 +83,9 @@ const normalizeSessionSummary = (session: SessionSummary): SessionSummary => {
   const updatedAt = ensureIso(session.updatedAt, createdAt)
   const firstSeenAt = ensureIso(session.firstSeenAt, createdAt)
   const lastSeenAt = ensureIso(session.lastSeenAt, updatedAt)
+  const modes = normalizeExecutionModes(session.modes)
+  const latestMode =
+    normalizeExecutionMode(session.latestMode) ?? modes?.[modes.length - 1] ?? null
   const userArchived = Boolean(session.userArchived)
   const userArchivedAt = userArchived
     ? ensureIso(session.userArchivedAt, updatedAt)
@@ -73,6 +95,8 @@ const normalizeSessionSummary = (session: SessionSummary): SessionSummary => {
     ...session,
     createdAt,
     updatedAt,
+    modes,
+    latestMode,
     firstSeenAt,
     lastSeenAt,
     missingFromLastSync: Boolean(session.missingFromLastSync),
@@ -80,6 +104,12 @@ const normalizeSessionSummary = (session: SessionSummary): SessionSummary => {
     userArchivedAt
   }
 }
+
+const normalizeSessionMessage = (message: SessionMessage): SessionMessage => ({
+  ...message,
+  mode: normalizeExecutionMode(message.mode) ?? undefined,
+  timestamp: ensureIso(message.timestamp, new Date().toISOString())
+})
 
 const normalizeStarRecord = (star: MessageStarRecord): MessageStarRecord => {
   const createdAt = ensureIso(star.createdAt, new Date().toISOString())
@@ -117,7 +147,9 @@ const normalizeArtifactSyncCacheEntry = (
   inserts: Array.isArray(entry.inserts)
     ? entry.inserts.map(row => ({
         session: normalizeSessionSummary(row.session),
-        messages: Array.isArray(row.messages) ? row.messages : []
+        messages: Array.isArray(row.messages)
+          ? row.messages.map(message => normalizeSessionMessage(message))
+          : []
       }))
     : []
 })
@@ -169,7 +201,7 @@ export class SessionStorage {
         sessions: parsed.sessions.map(session =>
           normalizeSessionSummary(session)
         ),
-        messages: parsed.messages,
+        messages: parsed.messages.map(message => normalizeSessionMessage(message)),
         stars: parsedStars,
         artifacts: Array.isArray((parsed as { artifacts?: unknown }).artifacts)
           ? (
@@ -328,7 +360,9 @@ export class SessionStorage {
   replaceAll(rows: SessionInsert[]): void {
     logInfo('Replacing storage content', { rows: rows.length })
     const sessions = rows.map(row => normalizeSessionSummary(row.session))
-    const messages = rows.flatMap(row => row.messages)
+    const messages = rows.flatMap(row =>
+      row.messages.map(message => normalizeSessionMessage(message))
+    )
     const sessionsById = new Map(sessions.map(session => [session.id, session]))
     const messagesBySession = new Map<string, SessionMessage[]>()
     for (const message of messages) {
@@ -417,7 +451,10 @@ export class SessionStorage {
         userArchived: preserveManualArchive,
         userArchivedAt: archiveTimestamp
       })
-      nextMessagesBySession.set(normalizedIncoming.id, row.messages)
+      nextMessagesBySession.set(
+        normalizedIncoming.id,
+        row.messages.map(message => normalizeSessionMessage(message))
+      )
     }
 
     for (const [sessionId, session] of nextSessionsById.entries()) {

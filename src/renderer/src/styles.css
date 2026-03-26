@@ -361,6 +361,28 @@ button:hover {
   line-height: 1.2;
 }
 
+.message-mode-pill {
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.message-mode-pill-plan {
+  color: #bff4f0;
+  background: #0f3134;
+  border-color: #1c676b;
+}
+
+.message-mode-pill-autopilot {
+  color: #d7f5d8;
+  background: #173625;
+  border-color: #2f7a46;
+}
+
 .session-path {
   color: #93c5fd;
   font-size: 12px;
@@ -631,6 +653,16 @@ button:hover {
   background: #1d2a43;
 }
 
+.message-user.message-mode-plan {
+  background: #133237;
+  border-color: #1f5c63;
+}
+
+.message-user.message-mode-autopilot {
+  background: #1b3221;
+  border-color: #2f6d3f;
+}
+
 .message-assistant {
   align-self: flex-start;
   background: #161b22;
@@ -641,6 +673,9 @@ button:hover {
   color: #9ca3af;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .message-header {

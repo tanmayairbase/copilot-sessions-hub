@@ -11,6 +11,8 @@ const sessions: SessionSummary[] = [
     source: 'cli',
     repoPath: '/repos/a',
     title: 'Implement auth parser',
+    modes: ['plan', 'autopilot'],
+    latestMode: 'autopilot',
     model: 'gpt-5.3-codex',
     createdAt: '2026-03-10T10:00:00.000Z',
     updatedAt: '2026-03-10T10:30:00.000Z',
@@ -186,6 +188,12 @@ describe('SessionListSidebar', () => {
   it('shows archived badge for sessions missing from latest sync', () => {
     renderSidebar({ sessions: [{ ...sessions[0], missingFromLastSync: true }] })
     expect(screen.getByText('Archived')).toBeTruthy()
+  })
+
+  it('does not show mode badges in session rows', () => {
+    renderSidebar()
+    expect(screen.queryByText('Plan')).toBeNull()
+    expect(screen.queryByText('Autopilot')).toBeNull()
   })
 
   it('shows collapsed archived search section and expands on click', () => {

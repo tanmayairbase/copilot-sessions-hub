@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import AnsiToHtml from 'ansi-to-html'
 import { marked } from 'marked'
 import { normalizeExternalUrl } from '@shared/links'
-import type { SessionDetail, SessionMessage } from '@shared/types'
+import type { SessionDetail, SessionExecutionMode, SessionMessage } from '@shared/types'
 import {
   formatMinuteKeyIST,
   formatSessionOrigin,
@@ -73,6 +73,7 @@ interface MessageGroup {
   primaryMessageId: string
   messageIds: string[]
   role: SessionMessage['role']
+  mode?: SessionMessage['mode']
   combinedContent: string
   timestamp: string
   hasStarredMessage: boolean
@@ -85,6 +86,9 @@ const toFileLabel = (path: string): string => {
   return normalized.split('/').at(-1) || path
 }
 
+const formatExecutionMode = (mode: SessionExecutionMode): string =>
+  mode === 'autopilot' ? 'Autopilot' : 'Plan'
+
 const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
   const groups: MessageGroup[] = []
 
@@ -93,7 +97,12 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
     const last = groups[groups.length - 1]
     const lastMinuteKey = last ? formatMinuteKeyIST(last.timestamp) : ''
 
-    if (last && last.role === message.role && lastMinuteKey === minuteKey) {
+    if (
+      last &&
+      last.role === message.role &&
+      last.mode === message.mode &&
+      lastMinuteKey === minuteKey
+    ) {
       last.combinedContent = `${last.combinedContent}\n\n${message.content}`
       last.messageIds.push(message.id)
       last.hasStarredMessage =
@@ -144,6 +153,7 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
       primaryMessageId: message.id,
       messageIds: [message.id],
       role: message.role,
+      mode: message.mode,
       combinedContent: message.content,
       timestamp: message.timestamp,
       hasStarredMessage: Boolean(message.userStarred),
@@ -162,6 +172,8 @@ export const SessionDetailView = ({
   focusMessageId,
   onFocusedMessageConsumed
 }: Props) => {
+  const threadRef = useRef<HTMLDivElement | null>(null)
+  const autoScrolledSessionIdRef = useRef<string | null>(null)
   const groupedMessages = useMemo(
     () => groupMessagesByMinute(detail?.messages ?? []),
     [detail]
@@ -185,6 +197,32 @@ export const SessionDetailView = ({
     }
     return groupedMessages.slice(groupedMessages.length - visibleCount)
   }, [groupedMessages, visibleCount])
+
+  useLayoutEffect(() => {
+    if (!detail) {
+      autoScrolledSessionIdRef.current = null
+      return
+    }
+    if (focusMessageId) {
+      return
+    }
+
+    const initialVisibleCount = Math.min(groupedMessages.length, DETAIL_CHUNK_SIZE)
+    if (visibleCount !== initialVisibleCount) {
+      return
+    }
+    if (autoScrolledSessionIdRef.current === detail.id) {
+      return
+    }
+
+    const thread = threadRef.current
+    if (!thread) {
+      return
+    }
+
+    thread.scrollTop = 0
+    autoScrolledSessionIdRef.current = detail.id
+  }, [detail, focusMessageId, groupedMessages.length, visibleCount])
 
   useEffect(() => {
     if (!focusMessageId) {
@@ -258,7 +296,7 @@ export const SessionDetailView = ({
         </button>
       </header>
 
-      <div className="message-thread">
+      <div ref={threadRef} className="message-thread">
         {groupedMessages.length > visibleMessages.length ? (
           <button
             type="button"
@@ -276,13 +314,20 @@ export const SessionDetailView = ({
         {visibleMessages.map(message => (
           <article
             key={message.id}
-            className={`message ${message.role === 'user' ? 'message-user' : 'message-assistant'}`}
+            className={`message ${message.role === 'user' ? 'message-user' : 'message-assistant'} ${message.role === 'user' && message.mode ? `message-mode-${message.mode}` : ''}`}
             aria-label={`${message.role} message`}
             data-message-id-list={message.messageIds.join(' ')}
           >
             <div className="message-header">
               <div className="message-role">
                 {message.role === 'user' ? 'You' : 'Copilot'}
+                {message.role === 'user' && message.mode ? (
+                  <span
+                    className={`message-mode-pill message-mode-pill-${message.mode}`}
+                  >
+                    {formatExecutionMode(message.mode)}
+                  </span>
+                ) : null}
               </div>
               <button
                 type="button"

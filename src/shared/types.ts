@@ -1,4 +1,5 @@
 export type SessionSource = 'cli' | 'vscode' | 'opencode'
+export type SessionExecutionMode = 'plan' | 'autopilot'
 
 export type DiscoveryMode = 'autodiscovery' | 'explicit' | 'both'
 export type SyncMode = 'manual' | 'manual-plus-background'
@@ -17,6 +18,8 @@ export interface SessionSummary {
   repoPath: string
   title: string
   agent?: string | null
+  modes?: SessionExecutionMode[]
+  latestMode?: SessionExecutionMode | null
   model: string | null
   createdAt: string
   updatedAt: string
@@ -35,6 +38,7 @@ export interface SessionMessage {
   id: string
   sessionId: string
   role: 'user' | 'assistant'
+  mode?: SessionExecutionMode | null
   content: string
   format: 'markdown' | 'text' | 'ansi'
   timestamp: string

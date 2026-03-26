@@ -3,6 +3,7 @@ import { basename, dirname, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type {
   SessionMessage,
+  SessionExecutionMode,
   SessionSource,
   SessionSummary
 } from '../shared/types'
@@ -539,6 +540,108 @@ const extractEventLogAgent = (
       sessionStart?.data?.['agentName']
     )
   )
+}
+
+const normalizeExecutionMode = (
+  value: unknown
+): SessionExecutionMode | null => {
+  const normalized = firstString(value)?.trim().toLowerCase()
+  if (normalized === 'plan' || normalized === 'autopilot') {
+    return normalized
+  }
+  return null
+}
+
+const inferPlanModeFromTransformedContent = (
+  value: unknown
+): SessionExecutionMode | null => {
+  const transformed = firstString(value)
+  if (!transformed) {
+    return null
+  }
+  return transformed.includes('[[PLAN]]') ? 'plan' : null
+}
+
+const appendExecutionMode = (
+  modes: SessionExecutionMode[],
+  mode: SessionExecutionMode | null
+): void => {
+  if (!mode || modes[modes.length - 1] === mode) {
+    return
+  }
+  modes.push(mode)
+}
+
+const inferModeFromPlanExitText = (
+  value: unknown
+): SessionExecutionMode | null => {
+  const text = firstString(value)?.toLowerCase()
+  if (!text) {
+    return null
+  }
+  if (text.includes('plan not approved')) {
+    return null
+  }
+  if (text.includes('autopilot mode') || text.includes('exited plan mode')) {
+    return 'autopilot'
+  }
+  return null
+}
+
+const extractExitPlanModeResultText = (line: SessionEvent): string | null => {
+  const data = asRecord(line.data)
+  if (!data) {
+    return null
+  }
+
+  if (line.type === 'hook.start' || line.type === 'hook.end') {
+    const input = asRecord(data['input'])
+    if (firstString(input?.['toolName']) !== 'exit_plan_mode') {
+      return null
+    }
+    const toolResult = asRecord(input?.['toolResult'])
+    return firstString(
+      toolResult?.['textResultForLlm'],
+      toolResult?.['sessionLog']
+    )
+  }
+
+  if (line.type !== 'tool.execution_complete') {
+    return null
+  }
+
+  if (firstString(data['toolName']) !== 'exit_plan_mode') {
+    return null
+  }
+
+  const result = asRecord(data['result'])
+  return firstString(
+    result?.['textResultForLlm'],
+    result?.['sessionLog'],
+    result?.['detailedContent'],
+    result?.['content']
+  )
+}
+
+const collectEventLogModes = (lines: SessionEvent[]): SessionExecutionMode[] => {
+  const modes: SessionExecutionMode[] = []
+
+  for (const line of lines) {
+    if (line.type === 'user.message') {
+      appendExecutionMode(
+        modes,
+        normalizeExecutionMode(line.data?.['agentMode']) ??
+          inferPlanModeFromTransformedContent(line.data?.['transformedContent'])
+      )
+    }
+
+    appendExecutionMode(
+      modes,
+      inferModeFromPlanExitText(extractExitPlanModeResultText(line))
+    )
+  }
+
+  return modes
 }
 
 interface VsCodeSessionMutation {
@@ -1147,10 +1250,14 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
     .find((value): value is string => Boolean(value?.trim()))
 
   const messages: SessionMessage[] = []
+  const detectedModes = collectEventLogModes(lines)
   let messageIndex = 0
   for (const line of lines) {
     if (line.type === 'user.message') {
       const payload = line.data ?? {}
+      const mode =
+        normalizeExecutionMode(payload['agentMode']) ??
+        inferPlanModeFromTransformedContent(payload['transformedContent'])
       const content = firstString(
         payload['content'],
         payload['transformedContent']
@@ -1165,6 +1272,7 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
         id: stableId(sessionId, `u-${messageIndex}`, content.slice(0, 24)),
         sessionId,
         role: 'user',
+        mode: mode ?? undefined,
         content,
         format: inferFormat(content),
         timestamp: new Date(timestamp).toISOString()
@@ -1230,6 +1338,8 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
       ? normalizedPreferredTitle.slice(0, 120)
       : titleSeed.slice(0, 120),
     agent: detectedAgent,
+    modes: detectedModes.length > 0 ? detectedModes : undefined,
+    latestMode: detectedModes.at(-1) ?? null,
     model: firstString(
       lastToolModel,
       sessionStart?.data?.['model'],

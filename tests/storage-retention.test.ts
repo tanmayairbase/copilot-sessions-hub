@@ -174,6 +174,62 @@ describe('SessionStorage archival retention', () => {
     expect(byPartialId[0]?.id).toBe('session-beta-999')
   })
 
+  it('persists session modes and per-message modes across sync', async () => {
+    const tempDir = await fs.mkdtemp(join(tmpdir(), 'copilot-storage-retention-'))
+    const storage = new SessionStorage(join(tempDir, 'sessions-store.json'))
+
+    storage.mergeFromSync(
+      [
+        {
+          session: {
+            id: 'session-modeful',
+            source: 'cli',
+            repoPath: '/tmp/repo',
+            title: 'Mode aware session',
+            modes: ['plan', 'autopilot'],
+            latestMode: 'autopilot',
+            model: 'gpt-5.3-codex',
+            createdAt: '2026-03-01T00:00:00.000Z',
+            updatedAt: '2026-03-01T01:00:00.000Z',
+            messageCount: 2,
+            filePath: '/tmp/repo/.copilot/modeful.json',
+            openVscodeTarget: '/tmp/repo/.copilot/modeful.json',
+            openCliCwd: '/tmp/repo'
+          },
+          messages: [
+            {
+              id: 'session-modeful-u1',
+              sessionId: 'session-modeful',
+              role: 'user',
+              mode: 'plan',
+              content: 'Please plan this work.',
+              format: 'text',
+              timestamp: '2026-03-01T00:00:00.000Z'
+            },
+            {
+              id: 'session-modeful-u2',
+              sessionId: 'session-modeful',
+              role: 'user',
+              mode: 'autopilot',
+              content: 'Now implement it.',
+              format: 'text',
+              timestamp: '2026-03-01T01:00:00.000Z'
+            }
+          ]
+        }
+      ],
+      '2026-03-01T02:00:00.000Z'
+    )
+
+    const summary = storage.list('').find(session => session.id === 'session-modeful')
+    expect(summary?.modes).toEqual(['plan', 'autopilot'])
+    expect(summary?.latestMode).toBe('autopilot')
+
+    const detail = storage.getSessionDetail('session-modeful')
+    expect(detail?.messages[0]?.mode).toBe('plan')
+    expect(detail?.messages[1]?.mode).toBe('autopilot')
+  })
+
   it('persists local archive state without deleting messages', async () => {
     const tempDir = await fs.mkdtemp(
       join(tmpdir(), 'copilot-storage-retention-')

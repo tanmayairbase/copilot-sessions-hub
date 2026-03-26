@@ -216,6 +216,75 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].session.agent).toBe('any-removal-first-migration-agent')
   })
 
+  it('detects plan and autopilot modes from CLI events', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-events-mode-flow',
+          producer: 'copilot-agent',
+          copilotVersion: '1.0.11',
+          startTime: '2026-03-10T10:00:00.000Z',
+          context: { cwd: '/tmp/repo-events' }
+        },
+        timestamp: '2026-03-10T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: {
+          content: 'Please inspect this feature first.',
+          transformedContent:
+            '<current_datetime>2026-03-10T10:00:01.000Z</current_datetime>\n\n[[PLAN]] Please create a plan first.'
+        },
+        timestamp: '2026-03-10T10:00:01.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'I will put together a plan.' },
+        timestamp: '2026-03-10T10:00:05.000Z'
+      }),
+      JSON.stringify({
+        type: 'hook.start',
+        data: {
+          input: {
+            toolName: 'exit_plan_mode',
+            toolResult: {
+              textResultForLlm:
+                'Plan approved! Exited plan mode.\n\nYou are now in autopilot mode (edits will be auto-approved).'
+            }
+          }
+        },
+        timestamp: '2026-03-10T10:02:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: {
+          content: 'Great, implement it now.',
+          agentMode: 'autopilot'
+        },
+        timestamp: '2026-03-10T10:02:10.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Working on the implementation now.' },
+        timestamp: '2026-03-10T10:02:20.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-mode-flow/events.jsonl',
+      repoRoot: '/tmp/repo-events',
+      source: 'cli'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].session.modes).toEqual(['plan', 'autopilot'])
+    expect(parsed[0].session.latestMode).toBe('autopilot')
+    expect(parsed[0].messages[0]?.mode).toBe('plan')
+    expect(parsed[0].messages[2]?.mode).toBe('autopilot')
+  })
+
   it('uses CLI summary hints for events session title', () => {
     const raw = [
       JSON.stringify({
