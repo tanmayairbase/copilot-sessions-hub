@@ -4,26 +4,33 @@ Desktop Electron app (TypeScript + Node 24) that aggregates Copilot sessions fro
 
 <img width="1398" height="901" alt="image" src="https://github.com/user-attachments/assets/274fa0f2-f7e5-48ab-b15c-183f029b8f09" />
 
+## Pain points this app addresses
+
+- Copilot session history is fragmented across tools and repositories, with no single place to browse it.
+- Past prompts, responses, and decisions are hard to rediscover once a session is closed.
+- There is no reliable full-text search across both user prompts and Copilot responses across all sessions.
+- Session history can disappear after retention limits, making older conversations hard or impossible to revisit later.
+- As session volume grows, history becomes noisy and harder to organize without filtering, starring, and archiving.
 
 ## Features
 
-- Sync sessions from configurable repository roots.
-- Supports Copilot CLI, VS Code Copilot Chat, and OpenCode session discovery.
-- Retains synced sessions locally across future syncs (historical sessions remain searchable even if later removed upstream).
-- Search sessions by metadata and message text.
-- Sidebar filters for repository/model/origin (multi-select) and IST date windows.
-- Sessions not found in the latest sync are marked with an **Archived** badge.
-- Local-only session archiving from the sidebar context menu (does not modify Copilot/VS Code/OpenCode data).
-- Archived sessions are hidden by default, can be shown via an Archived filter, and appear in a collapsed archived-search section when search matches exist.
-- Manually archived sessions auto-unarchive if upstream session activity changes on a later sync.
-- During sync, manually archived sessions older than four months are pruned from local storage.
-- Message-level starring for local bookmarks (user or assistant messages) in read-only detail view.
-- Collapsed **Starred** sidebar section with quick jump back to the parent session/message.
-- If a starred message target disappears upstream, bookmark is retained as a stale local entry.
-- Resizable sidebar list and detail pane chat UI.
-- **Read-only** session detail transcript (no in-app chatting/editing).
-- Session metadata with model + timestamp formatting as `MMM DD, YYYY HH:mm IST`.
-- Settings UI plus editable JSON config file.
+- Aggregates sessions from Copilot CLI, VS Code Copilot Chat, and OpenCode into one desktop view.
+- Syncs from configurable repository roots and keeps synced history locally for later rediscovery.
+- Provides full-text search plus repository, model, origin, date, archived, and starred filters.
+- Renders a read-only chat-style session detail view with model metadata, IST timestamps, and external-link support.
+- Supports local organization with starring, archiving, archived history handling, and quick jumps back to important messages.
+- Includes a resizable sidebar, settings UI, editable JSON config, and optional background sync.
+
+## Documentation
+
+Contributor-focused architecture and implementation docs live in [`docs/`](docs/README.md).
+
+Start with:
+
+- [`docs/README.md`](docs/README.md)
+- [`docs/runtime-architecture.md`](docs/runtime-architecture.md)
+- [`docs/sync-and-storage.md`](docs/sync-and-storage.md)
+- [`docs/ui-and-interactions.md`](docs/ui-and-interactions.md)
 
 ## Prerequisites
 
