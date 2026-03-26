@@ -1,4 +1,11 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import AnsiToHtml from 'ansi-to-html'
 import { marked } from 'marked'
 import { normalizeExternalUrl } from '@shared/links'
@@ -55,6 +62,47 @@ const renderAssistantContent = (content: string): string => {
 
 const renderUserContent = (content: string): string => renderMarkdownContent(content)
 const DETAIL_CHUNK_SIZE = 220
+const SCROLL_CONTROL_EDGE_THRESHOLD = 28
+const SCROLL_CONTROL_REVEAL_THRESHOLD = 140
+const SCROLL_CONTROL_TOP_THRESHOLD = 120
+const SCROLL_CONTROL_MIN_OVERFLOW = 160
+
+type ScrollControlAction = 'top' | 'bottom' | null
+
+const getScrollControlAction = (
+  element: HTMLElement,
+  previousScrollTop: number,
+  currentAction: ScrollControlAction
+): ScrollControlAction => {
+  const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
+  if (maxScrollTop < SCROLL_CONTROL_MIN_OVERFLOW) {
+    return null
+  }
+
+  const nearTop = element.scrollTop <= SCROLL_CONTROL_EDGE_THRESHOLD
+  const nearBottom =
+    maxScrollTop - element.scrollTop <= SCROLL_CONTROL_EDGE_THRESHOLD
+  const scrollingDown = element.scrollTop > previousScrollTop
+  const scrollingUp = element.scrollTop < previousScrollTop
+
+  if (nearBottom) {
+    return null
+  }
+
+  if (element.scrollTop <= SCROLL_CONTROL_REVEAL_THRESHOLD || nearTop) {
+    return null
+  }
+
+  if (scrollingDown) {
+    return 'bottom'
+  }
+
+  if (scrollingUp) {
+    return element.scrollTop > SCROLL_CONTROL_TOP_THRESHOLD ? 'top' : 'bottom'
+  }
+
+  return currentAction ?? 'bottom'
+}
 
 interface Props {
   detail: SessionDetail | null
@@ -174,11 +222,52 @@ export const SessionDetailView = ({
 }: Props) => {
   const threadRef = useRef<HTMLDivElement | null>(null)
   const autoScrolledSessionIdRef = useRef<string | null>(null)
+  const lastThreadScrollTopRef = useRef(0)
   const groupedMessages = useMemo(
     () => groupMessagesByMinute(detail?.messages ?? []),
     [detail]
   )
   const [visibleCount, setVisibleCount] = useState(DETAIL_CHUNK_SIZE)
+  const [scrollControlAction, setScrollControlAction] =
+    useState<ScrollControlAction>(null)
+
+  const syncScrollControls = useCallback(() => {
+    const thread = threadRef.current
+    if (!thread) {
+      lastThreadScrollTopRef.current = 0
+      setScrollControlAction(current => (current === null ? current : null))
+      return
+    }
+
+    const nextAction = getScrollControlAction(
+      thread,
+      lastThreadScrollTopRef.current,
+      scrollControlAction
+    )
+    lastThreadScrollTopRef.current = thread.scrollTop
+
+    setScrollControlAction(current =>
+      current === nextAction ? current : nextAction
+    )
+  }, [scrollControlAction])
+
+  const scrollThreadToTop = useCallback(() => {
+    const thread = threadRef.current
+    if (!thread) {
+      return
+    }
+
+    thread.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  const scrollThreadToBottom = useCallback(() => {
+    const thread = threadRef.current
+    if (!thread) {
+      return
+    }
+
+    thread.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' })
+  }, [])
 
   useEffect(() => {
     if (!detail) {
@@ -201,6 +290,8 @@ export const SessionDetailView = ({
   useLayoutEffect(() => {
     if (!detail) {
       autoScrolledSessionIdRef.current = null
+      lastThreadScrollTopRef.current = 0
+      setScrollControlAction(null)
       return
     }
     if (focusMessageId) {
@@ -221,8 +312,38 @@ export const SessionDetailView = ({
     }
 
     thread.scrollTop = 0
+    lastThreadScrollTopRef.current = 0
+    syncScrollControls()
     autoScrolledSessionIdRef.current = detail.id
-  }, [detail, focusMessageId, groupedMessages.length, visibleCount])
+  }, [
+    detail,
+    focusMessageId,
+    groupedMessages.length,
+    syncScrollControls,
+    visibleCount
+  ])
+
+  useEffect(() => {
+    const thread = threadRef.current
+    if (!thread) {
+      lastThreadScrollTopRef.current = 0
+      setScrollControlAction(null)
+      return
+    }
+
+    const handleScroll = (): void => {
+      syncScrollControls()
+    }
+
+    thread.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('resize', syncScrollControls)
+    syncScrollControls()
+
+    return () => {
+      thread.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', syncScrollControls)
+    }
+  }, [detail?.id, syncScrollControls, visibleMessages.length])
 
   useEffect(() => {
     if (!focusMessageId) {
@@ -296,123 +417,153 @@ export const SessionDetailView = ({
         </button>
       </header>
 
-      <div ref={threadRef} className="message-thread">
-        {groupedMessages.length > visibleMessages.length ? (
-          <button
-            type="button"
-            className="message-load-older"
-            onClick={() =>
-              setVisibleCount(current =>
-                Math.min(groupedMessages.length, current + DETAIL_CHUNK_SIZE)
-              )
-            }
-          >
-            Load older messages (
-            {groupedMessages.length - visibleMessages.length} remaining)
-          </button>
-        ) : null}
-        {visibleMessages.map(message => (
-          <article
-            key={message.id}
-            className={`message ${message.role === 'user' ? 'message-user' : 'message-assistant'} ${message.role === 'user' && message.mode ? `message-mode-${message.mode}` : ''}`}
-            aria-label={`${message.role} message`}
-            data-message-id-list={message.messageIds.join(' ')}
-          >
-            <div className="message-header">
-              <div className="message-role">
-                {message.role === 'user' ? 'You' : 'Copilot'}
-                {message.role === 'user' && message.mode ? (
-                  <span
-                    className={`message-mode-pill message-mode-pill-${message.mode}`}
-                  >
-                    {formatExecutionMode(message.mode)}
-                  </span>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className={`message-star ${message.hasStarredMessage ? 'active' : ''}`}
-                aria-label={
-                  message.hasStarredMessage ? 'Unstar message' : 'Star message'
-                }
-                title={
-                  message.hasStarredMessage ? 'Unstar message' : 'Star message'
-                }
-                onClick={() => {
-                  void onToggleMessageStar?.(
-                    detail.id,
-                    message.primaryMessageId,
-                    !message.hasStarredMessage
-                  )
-                }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                </svg>
-              </button>
-            </div>
-            {message.references.length > 0 && (
-              <div className="message-artifacts">
-                {message.references.map(reference => {
-                  const label =
-                    reference.startLine && reference.endLine
-                      ? `${toFileLabel(reference.path)}:${reference.startLine}-${reference.endLine}`
-                      : toFileLabel(reference.path)
-                  return (
+      <div className="detail-thread-wrap">
+        <div ref={threadRef} className="message-thread">
+          {groupedMessages.length > visibleMessages.length ? (
+            <button
+              type="button"
+              className="message-load-older"
+              onClick={() =>
+                setVisibleCount(current =>
+                  Math.min(groupedMessages.length, current + DETAIL_CHUNK_SIZE)
+                )
+              }
+            >
+              Load older messages (
+              {groupedMessages.length - visibleMessages.length} remaining)
+            </button>
+          ) : null}
+          {visibleMessages.map(message => (
+            <article
+              key={message.id}
+              className={`message ${message.role === 'user' ? 'message-user' : 'message-assistant'} ${message.role === 'user' && message.mode ? `message-mode-${message.mode}` : ''}`}
+              aria-label={`${message.role} message`}
+              data-message-id-list={message.messageIds.join(' ')}
+            >
+              <div className="message-header">
+                <div className="message-role">
+                  {message.role === 'user' ? 'You' : 'Copilot'}
+                  {message.role === 'user' && message.mode ? (
                     <span
-                      key={`${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`}
-                      className="message-artifact-chip"
+                      className={`message-mode-pill message-mode-pill-${message.mode}`}
                     >
-                      {label}
+                      {formatExecutionMode(message.mode)}
                     </span>
-                  )
-                })}
-              </div>
-            )}
-            {message.edits.length > 0 && (
-              <div className="message-artifacts">
-                {message.edits.map(edit => {
-                  const lineRange =
-                    edit.startLine && edit.endLine
-                      ? ` (${edit.startLine}-${edit.endLine})`
-                      : ''
-                  const added = edit.addedLines ?? 0
-                  const removed = edit.removedLines ?? 0
-                  const delta =
-                    added > 0 || removed > 0 ? ` +${added} -${removed}` : ''
-                  return (
-                    <span
-                      key={`edit:${edit.path}`}
-                      className="message-artifact-chip"
-                    >
-                      Edited {toFileLabel(edit.path)}
-                      {delta}
-                      {lineRange}
-                    </span>
-                  )
-                })}
-              </div>
-            )}
-            <div className="message-content">
-              {message.role === 'assistant' ? (
-                <div
-                  dangerouslySetInnerHTML={{
-                    __html: renderAssistantContent(message.combinedContent)
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className={`message-star ${message.hasStarredMessage ? 'active' : ''}`}
+                  aria-label={
+                    message.hasStarredMessage ? 'Unstar message' : 'Star message'
+                  }
+                  title={
+                    message.hasStarredMessage ? 'Unstar message' : 'Star message'
+                  }
+                  onClick={() => {
+                    void onToggleMessageStar?.(
+                      detail.id,
+                      message.primaryMessageId,
+                      !message.hasStarredMessage
+                    )
                   }}
-                />
-              ) : (
-                <div
-                  dangerouslySetInnerHTML={{
-                    __html: renderUserContent(message.combinedContent)
-                  }}
-                />
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                </button>
+              </div>
+              {message.references.length > 0 && (
+                <div className="message-artifacts">
+                  {message.references.map(reference => {
+                    const label =
+                      reference.startLine && reference.endLine
+                        ? `${toFileLabel(reference.path)}:${reference.startLine}-${reference.endLine}`
+                        : toFileLabel(reference.path)
+                    return (
+                      <span
+                        key={`${reference.path}:${reference.startLine ?? ''}:${reference.endLine ?? ''}`}
+                        className="message-artifact-chip"
+                      >
+                        {label}
+                      </span>
+                    )
+                  })}
+                </div>
               )}
-            </div>
-            <time className="message-time">
-              {formatTimestampIST(message.timestamp)}
-            </time>
-          </article>
-        ))}
+              {message.edits.length > 0 && (
+                <div className="message-artifacts">
+                  {message.edits.map(edit => {
+                    const lineRange =
+                      edit.startLine && edit.endLine
+                        ? ` (${edit.startLine}-${edit.endLine})`
+                        : ''
+                    const added = edit.addedLines ?? 0
+                    const removed = edit.removedLines ?? 0
+                    const delta =
+                      added > 0 || removed > 0 ? ` +${added} -${removed}` : ''
+                    return (
+                      <span
+                        key={`edit:${edit.path}`}
+                        className="message-artifact-chip"
+                      >
+                        Edited {toFileLabel(edit.path)}
+                        {delta}
+                        {lineRange}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+              <div className="message-content">
+                {message.role === 'assistant' ? (
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: renderAssistantContent(message.combinedContent)
+                    }}
+                  />
+                ) : (
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: renderUserContent(message.combinedContent)
+                    }}
+                  />
+                )}
+              </div>
+              <time className="message-time">
+                {formatTimestampIST(message.timestamp)}
+              </time>
+            </article>
+          ))}
+        </div>
+        {scrollControlAction ? (
+          <div className="message-thread-scroll-controls">
+            <button
+              type="button"
+              className={`message-thread-scroll-button ${scrollControlAction === 'top' ? 'message-thread-scroll-button-up' : ''}`}
+              aria-label={
+                scrollControlAction === 'top' ? 'Back to top' : 'Scroll to bottom'
+              }
+              title={
+                scrollControlAction === 'top' ? 'Back to top' : 'Scroll to bottom'
+              }
+              onClick={
+                scrollControlAction === 'top'
+                  ? scrollThreadToTop
+                  : scrollThreadToBottom
+              }
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 16.5a1 1 0 0 1-.7-.29l-5-5 1.4-1.42 4.3 4.3 4.3-4.3 1.4 1.42-5 5a1 1 0 0 1-.7.29Z" />
+              </svg>
+              <span>
+                {scrollControlAction === 'top'
+                  ? 'Back to top'
+                  : 'Scroll to bottom'}
+              </span>
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   )

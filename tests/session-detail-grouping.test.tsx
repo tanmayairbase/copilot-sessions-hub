@@ -65,6 +65,38 @@ const detail: SessionDetail = {
   ]
 }
 
+const setThreadMetrics = (
+  thread: HTMLDivElement,
+  options: {
+    scrollTop?: number
+    scrollHeight: number
+    clientHeight: number
+    scrollTo?: ReturnType<typeof vi.fn>
+  }
+): ReturnType<typeof vi.fn> => {
+  Object.defineProperties(thread, {
+    scrollTop: {
+      value: options.scrollTop ?? 0,
+      writable: true,
+      configurable: true
+    },
+    scrollHeight: {
+      value: options.scrollHeight,
+      configurable: true
+    },
+    clientHeight: {
+      value: options.clientHeight,
+      configurable: true
+    },
+    scrollTo: {
+      value: options.scrollTo ?? vi.fn(),
+      configurable: true
+    }
+  })
+
+  return thread.scrollTo as ReturnType<typeof vi.fn>
+}
+
 describe('SessionDetailView grouping', () => {
   afterEach(() => {
     cleanup()
@@ -179,6 +211,101 @@ describe('SessionDetailView grouping', () => {
     expect(links[1].getAttribute('href')).toBe('https://example.com/docs')
     expect(links[1].getAttribute('target')).toBe('_blank')
     expect(links[1].getAttribute('rel')).toBe('noopener noreferrer')
+  })
+
+  it('shows a single contextual floating scroll pill for long threads', async () => {
+    const { container } = render(<SessionDetailView detail={detail} />)
+    const thread = container.querySelector('.message-thread') as HTMLDivElement
+
+    setThreadMetrics(thread, {
+      scrollTop: 0,
+      scrollHeight: 1600,
+      clientHeight: 600
+    })
+    fireEvent.scroll(thread)
+
+    expect(screen.queryByRole('button', { name: 'Back to top' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Scroll to bottom' })).toBeNull()
+
+    thread.scrollTop = 180
+    fireEvent.scroll(thread)
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Scroll to bottom' })
+      ).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: 'Back to top' })).toBeNull()
+
+    thread.scrollTop = 320
+    fireEvent.scroll(thread)
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Scroll to bottom' })
+      ).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: 'Back to top' })).toBeNull()
+
+    thread.scrollTop = 180
+    fireEvent.scroll(thread)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Back to top' })).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: 'Scroll to bottom' })).toBeNull()
+
+    thread.scrollTop = 90
+    fireEvent.scroll(thread)
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'Scroll to bottom' })
+      ).toBeNull()
+    })
+    expect(screen.queryByRole('button', { name: 'Back to top' })).toBeNull()
+
+    thread.scrollTop = 980
+    fireEvent.scroll(thread)
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'Scroll to bottom' })
+      ).toBeNull()
+    })
+    expect(screen.queryByRole('button', { name: 'Back to top' })).toBeNull()
+  })
+
+  it('uses smooth scrolling when the floating pills are clicked', async () => {
+    const { container } = render(<SessionDetailView detail={detail} />)
+    const thread = container.querySelector('.message-thread') as HTMLDivElement
+    const scrollTo = setThreadMetrics(thread, {
+      scrollTop: 0,
+      scrollHeight: 1600,
+      clientHeight: 600
+    })
+
+    fireEvent.scroll(thread)
+
+    thread.scrollTop = 180
+    fireEvent.scroll(thread)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Scroll to bottom' })
+    )
+    expect(scrollTo).toHaveBeenLastCalledWith({
+      top: 1600,
+      behavior: 'smooth'
+    })
+
+    thread.scrollTop = 320
+    fireEvent.scroll(thread)
+
+    thread.scrollTop = 180
+    fireEvent.scroll(thread)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Back to top' }))
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'smooth' })
   })
 
   it('keeps same-minute user messages separate when their modes differ', () => {

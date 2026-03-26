@@ -617,12 +617,71 @@ button:hover {
   gap: 8px;
 }
 
+.detail-thread-wrap {
+  position: relative;
+  min-height: 0;
+}
+
 .message-thread {
   overflow: auto;
-  padding: 20px;
+  height: 100%;
+  padding: 20px 20px 88px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.message-thread-scroll-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.message-thread-scroll-button {
+  border-radius: 999px;
+  border: 1px solid #3a4556;
+  background: rgba(17, 24, 39, 0.96);
+  color: #dbe4ee;
+  padding: 9px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 14px 28px rgba(1, 4, 9, 0.36);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.message-thread-scroll-button:hover {
+  background: #1f2937;
+}
+
+.message-thread-scroll-button:focus-visible {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow:
+    0 0 0 1px #2563eb,
+    0 14px 28px rgba(1, 4, 9, 0.36);
+}
+
+.message-thread-scroll-button svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  flex: 0 0 auto;
+}
+
+.message-thread-scroll-button-up svg {
+  transform: rotate(180deg);
+}
+
+.message-thread-scroll-button span {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .message-load-older {
