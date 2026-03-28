@@ -20,6 +20,9 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm package
+pnpm package:mac
+pnpm package:win
+pnpm package:win:arm64
 ```
 
 Artifacts from packaging are emitted to `release/`.
@@ -128,7 +131,26 @@ Current targets:
 - Windows: `nsis`
 - Linux: `AppImage`
 
+Helpful release commands:
+
+```bash
+pnpm package:mac
+pnpm package:win
+pnpm package:win:arm64
+```
+
+Expected Windows installer artifact:
+
+```text
+release/Copilot Sessions Hub Setup <version>.exe
+```
+
+Notes:
+
+- `pnpm package:win` targets Windows `x64`, which is the default release target most users will want.
+- `pnpm package:win:arm64` is available for Windows on ARM.
+- On macOS, the first Windows packaging run may download Wine/NSIS helper binaries and take longer than usual.
+
 ## Doc hygiene
 
 If you change architecture, sync semantics, visible UX, supported sources, or major product decisions, update the matching file in `docs/`.
-

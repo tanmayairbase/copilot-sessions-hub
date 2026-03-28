@@ -10,6 +10,9 @@
     "build": "pnpm typecheck && electron-vite build",
     "build:dir": "pnpm build && electron-builder --dir",
     "package": "pnpm build && electron-builder",
+    "package:mac": "pnpm build && electron-builder --mac dmg",
+    "package:win": "pnpm build && electron-builder --win nsis --x64",
+    "package:win:arm64": "pnpm build && electron-builder --win nsis --arm64",
     "test": "vitest run --coverage",
     "format": "prettier --write .",
     "test:watch": "vitest",
@@ -73,6 +76,7 @@
       ]
     },
     "win": {
+      "icon": "build/icons/robot.ico",
       "target": [
         "nsis"
       ]

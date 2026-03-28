@@ -95,7 +95,33 @@ Create distributables for current platform:
 pnpm package
 ```
 
+Create a macOS DMG explicitly:
+
+```bash
+pnpm package:mac
+```
+
+Create a Windows installer executable (`.exe`) for standard Windows x64 machines:
+
+```bash
+pnpm package:win
+```
+
+Optional: create a Windows ARM64 installer:
+
+```bash
+pnpm package:win:arm64
+```
+
 Artifacts are generated in `release/`.
+
+Windows packaging outputs an installer like:
+
+```text
+release/Copilot Sessions Hub Setup <version>.exe
+```
+
+On macOS, cross-building Windows installers may download Wine/NSIS helper binaries on the first run, so the first packaging pass can take longer.
 
 ## Configuration
 
