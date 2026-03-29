@@ -13,6 +13,7 @@ import type {
 import { logError, logInfo, logWarn } from './logger'
 import { loadOpenCodeSessions } from './opencode'
 import { parseSessionArtifacts } from './parsers'
+import { isWithinRepoRoots } from './repo-roots'
 import {
   SessionStorage,
   type ArtifactSyncCacheEntry,
@@ -24,11 +25,6 @@ const ARTIFACT_CACHE_PARSER_VERSION = 4
 
 const expandHome = (value: string): string =>
   value.startsWith('~/') ? join(homedir(), value.slice(2)) : value
-
-const inRepoRoots = (candidate: string, roots: string[]): boolean => {
-  const resolvedCandidate = resolve(candidate)
-  return roots.some(root => resolvedCandidate.startsWith(resolve(root)))
-}
 
 const unique = <T>(value: T[]): T[] => [...new Set(value)]
 
@@ -346,7 +342,7 @@ export const syncSessions = async (
         skippedUnchanged += 1
         nextArtifactCacheByPath.set(filePath, cached)
         for (const artifact of cached.inserts) {
-          if (!inRepoRoots(artifact.session.repoPath, repoRoots)) {
+          if (!isWithinRepoRoots(artifact.session.repoPath, repoRoots)) {
             ignoredByRepoFilter += 1
             continue
           }
@@ -369,7 +365,7 @@ export const syncSessions = async (
       })
 
       for (const artifact of parsed) {
-        if (!inRepoRoots(artifact.session.repoPath, repoRoots)) {
+        if (!isWithinRepoRoots(artifact.session.repoPath, repoRoots)) {
           ignoredByRepoFilter += 1
           continue
         }

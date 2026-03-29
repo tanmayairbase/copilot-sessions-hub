@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { SessionMessage, SessionSummary } from '../shared/types'
 import { logError, logInfo, logWarn } from './logger'
+import { isWithinRepoRoots } from './repo-roots'
 import type { SessionInsert } from './storage'
 
 const OPENCODE_DB_PATH = join(
@@ -109,11 +110,6 @@ const inferFormat = (value: string): SessionMessage['format'] => {
   return 'text'
 }
 
-const inRepoRoots = (candidate: string, roots: string[]): boolean => {
-  const resolvedCandidate = resolve(candidate)
-  return roots.some(root => resolvedCandidate.startsWith(resolve(root)))
-}
-
 const normalizeRole = (value: unknown): SessionMessage['role'] | null => {
   const role = firstString(value)?.toLowerCase()
   if (!role) {
@@ -202,7 +198,7 @@ export const loadOpenCodeSessions = async (
     for (const sessionRow of sessionRows) {
       if (
         !sessionRow.directory ||
-        !inRepoRoots(sessionRow.directory, repoRoots)
+        !isWithinRepoRoots(sessionRow.directory, repoRoots)
       ) {
         continue
       }
