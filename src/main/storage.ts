@@ -384,12 +384,7 @@ export class SessionStorage {
   }
 
   getArtifactSyncCache(): Map<string, ArtifactSyncCacheEntry> {
-    return new Map(
-      this.store.artifacts.map(entry => [
-        entry.filePath,
-        normalizeArtifactSyncCacheEntry(entry)
-      ])
-    )
+    return new Map(this.store.artifacts.map(entry => [entry.filePath, entry]))
   }
 
   mergeFromSync(
@@ -400,10 +395,7 @@ export class SessionStorage {
     logInfo('Merging sync rows into storage', { rows: rows.length, syncedAt })
 
     const existingSessionsById = new Map(
-      this.store.sessions.map(session => [
-        session.id,
-        normalizeSessionSummary(session)
-      ])
+      this.store.sessions.map(session => [session.id, session])
     )
     const existingMessagesBySession = new Map<string, SessionMessage[]>()
     for (const message of this.store.messages) {
@@ -462,7 +454,7 @@ export class SessionStorage {
         continue
       }
       nextSessionsById.set(sessionId, {
-        ...normalizeSessionSummary(session),
+        ...session,
         missingFromLastSync: true
       })
     }
@@ -488,9 +480,9 @@ export class SessionStorage {
     this.store.sessions = [...nextSessionsById.values()]
     this.store.messages = [...nextMessagesBySession.values()].flat()
     if (artifactCache) {
-      this.store.artifacts = artifactCache
-        .map(entry => normalizeArtifactSyncCacheEntry(entry))
-        .sort((a, b) => a.filePath.localeCompare(b.filePath))
+      this.store.artifacts = [...artifactCache].sort((a, b) =>
+        a.filePath.localeCompare(b.filePath)
+      )
     }
     this.store.stars = this.reconcileStars(
       this.store.stars,

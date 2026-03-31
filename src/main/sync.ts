@@ -33,6 +33,13 @@ const autodiscoveryPatterns = [
   '**/.vscode/**/*copilot*.{json,jsonl}',
   '**/.github/copilot/**/*.{json,jsonl}'
 ]
+const artifactDiscoveryIgnore = [
+  '**/node_modules/**',
+  '**/.git/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/release/**'
+]
 
 const globalCopilotPattern = join(
   homedir(),
@@ -232,63 +239,63 @@ export const syncSessions = async (
   const files = new Set<string>()
   const scanStartedAt = performance.now()
 
-  for (const root of repoRoots) {
-    try {
-      const stat = await fs.stat(root)
-      if (!stat.isDirectory()) {
-        logWarn('Configured repo root is not a directory, skipping', { root })
-        continue
-      }
-    } catch (error) {
-      logWarn('Configured repo root does not exist, skipping', {
-        root,
-        reason: (error as Error).message
-      })
-      continue
-    }
+  const [repoRootEntries, globalEntries, globalVsCodeEntries] = await Promise.all([
+    Promise.all(
+      repoRoots.map(async root => {
+        try {
+          const stat = await fs.stat(root)
+          if (!stat.isDirectory()) {
+            logWarn('Configured repo root is not a directory, skipping', { root })
+            return []
+          }
+        } catch (error) {
+          logWarn('Configured repo root does not exist, skipping', {
+            root,
+            reason: (error as Error).message
+          })
+          return []
+        }
 
-    const rootEntries = await fg(patterns, {
-      cwd: root,
+        const rootEntries = await fg(patterns, {
+          cwd: root,
+          absolute: true,
+          onlyFiles: true,
+          suppressErrors: true,
+          unique: true,
+          ignore: artifactDiscoveryIgnore
+        })
+        logInfo('Scanned repo root', { root, filesFound: rootEntries.length })
+        return rootEntries
+      })
+    ),
+    fg(globalCopilotPattern, {
       absolute: true,
       onlyFiles: true,
       suppressErrors: true,
       unique: true,
-      ignore: [
-        '**/node_modules/**',
-        '**/.git/**',
-        '**/dist/**',
-        '**/build/**',
-        '**/release/**'
-      ]
+      ignore: ['**/node_modules/**', '**/.git/**']
+    }),
+    fg(globalVsCodeChatPattern, {
+      absolute: true,
+      onlyFiles: true,
+      suppressErrors: true,
+      unique: true
     })
-    logInfo('Scanned repo root', { root, filesFound: rootEntries.length })
+  ])
 
+  for (const rootEntries of repoRootEntries) {
     for (const entry of rootEntries) {
       files.add(entry)
     }
   }
 
-  const globalEntries = await fg(globalCopilotPattern, {
-    absolute: true,
-    onlyFiles: true,
-    suppressErrors: true,
-    unique: true,
-    ignore: ['**/node_modules/**', '**/.git/**']
-  })
   logInfo('Scanned global copilot session path', {
     filesFound: globalEntries.length
   })
-
   for (const entry of globalEntries) {
     files.add(entry)
   }
 
-  const globalVsCodeEntries = await fg(globalVsCodeChatPattern, {
-    absolute: true,
-    onlyFiles: true,
-    suppressErrors: true,
-    unique: true
-  })
   logInfo('Scanned VS Code workspace chat sessions', {
     filesFound: globalVsCodeEntries.length
   })
