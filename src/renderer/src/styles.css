@@ -997,6 +997,7 @@ button:hover {
 .modal-overlay {
   position: fixed;
   inset: 0;
+  z-index: 20;
   background: var(--overlay-backdrop);
   display: grid;
   place-items: center;
