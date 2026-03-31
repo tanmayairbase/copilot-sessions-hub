@@ -24,6 +24,7 @@ const buildConfig = (repoRoot: string): AppConfig => ({
   repoRoots: [repoRoot],
   discoveryMode: 'explicit',
   explicitPatterns: ['**/*.jsonl'],
+  appearance: 'system',
   syncMode: 'manual',
   backgroundSyncIntervalMinutes: 10
 })

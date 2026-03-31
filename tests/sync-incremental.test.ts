@@ -36,6 +36,7 @@ const buildConfig = (repoRoot: string): AppConfig => ({
   repoRoots: [repoRoot],
   discoveryMode: 'explicit',
   explicitPatterns: ['**/*.jsonl'],
+  appearance: 'system',
   syncMode: 'manual',
   backgroundSyncIntervalMinutes: 10
 })
@@ -57,7 +58,9 @@ describe('syncSessions incremental parsing', () => {
   })
 
   it('reuses cached parse output for unchanged files and reparses on change', async () => {
-    const tempDir = await fs.mkdtemp(join(tmpdir(), 'copilot-sync-incremental-'))
+    const tempDir = await fs.mkdtemp(
+      join(tmpdir(), 'copilot-sync-incremental-')
+    )
     const repoRoot = join(tempDir, 'repo')
     const artifactPath = join(
       repoRoot,
@@ -157,8 +160,9 @@ describe('syncSessions incremental parsing', () => {
     expect(third.filesScanned).toBe(1)
     expect(third.sessionsImported).toBe(1)
     expect(parseSessionArtifactsMock).toHaveBeenCalledTimes(2)
-    expect(storage.getSessionDetail('session-incremental-1')?.messages[0]?.content)
-      .toBe('changed message')
+    expect(
+      storage.getSessionDetail('session-incremental-1')?.messages[0]?.content
+    ).toBe('changed message')
 
     discoveredFiles.delete(artifactPath)
     const fourth = await syncSessions(buildConfig(repoRoot), storage)
@@ -169,8 +173,8 @@ describe('syncSessions incremental parsing', () => {
       .list('')
       .find(row => row.id === 'session-incremental-1')
     expect(archived?.missingFromLastSync).toBe(true)
-    expect(storage.getSessionDetail('session-incremental-1')?.messages).toHaveLength(
-      2
-    )
+    expect(
+      storage.getSessionDetail('session-incremental-1')?.messages
+    ).toHaveLength(2)
   })
 })

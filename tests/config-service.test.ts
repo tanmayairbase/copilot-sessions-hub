@@ -17,6 +17,7 @@ describe('ConfigService', () => {
     expect(config.repoRoots).toContain(defaultAirbaseRoot)
     expect(config.discoveryMode).toBe('both')
     expect(config.explicitPatterns.length).toBeGreaterThan(0)
+    expect(config.appearance).toBe('system')
     expect(config.syncMode).toBe('manual')
     expect(config.backgroundSyncIntervalMinutes).toBe(10)
   })
@@ -49,6 +50,7 @@ describe('ConfigService', () => {
         repoRoots: [defaultAirbaseRoot],
         discoveryMode: 'both',
         explicitPatterns: ['**/.copilot/**/*.json'],
+        appearance: 'light',
         syncMode: 'manual-plus-background',
         backgroundSyncIntervalMinutes: 0
       }),
@@ -57,6 +59,7 @@ describe('ConfigService', () => {
 
     const service = new ConfigService(configPath)
     const config = await service.load()
+    expect(config.appearance).toBe('light')
     expect(config.syncMode).toBe('manual-plus-background')
     expect(config.backgroundSyncIntervalMinutes).toBe(1)
   })

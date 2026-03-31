@@ -15,6 +15,7 @@ const baseConfig: AppConfig = {
   repoRoots: ['/Users/me/projects/frontend2'],
   discoveryMode: 'both',
   explicitPatterns: ['**/.copilot/**/*.json'],
+  appearance: 'system',
   syncMode: 'manual',
   backgroundSyncIntervalMinutes: 10
 }
@@ -48,6 +49,7 @@ describe('SettingsModal', () => {
         repoRoots: ['/Users/me/projects/airbase-frontend'],
         discoveryMode: 'both',
         explicitPatterns: ['**/.copilot/**/*.json'],
+        appearance: 'system',
         syncMode: 'manual',
         backgroundSyncIntervalMinutes: 10
       })
@@ -68,7 +70,7 @@ describe('SettingsModal', () => {
       />
     )
 
-    const dialog = screen.getByRole('dialog', { name: 'Sync settings' })
+    const dialog = screen.getByRole('dialog', { name: 'App settings' })
 
     fireEvent.change(
       within(dialog).getByRole('combobox', { name: 'Background sync mode' }),
@@ -91,8 +93,40 @@ describe('SettingsModal', () => {
         repoRoots: ['/Users/me/projects/frontend2'],
         discoveryMode: 'both',
         explicitPatterns: ['**/.copilot/**/*.json'],
+        appearance: 'system',
         syncMode: 'manual-plus-background',
         backgroundSyncIntervalMinutes: 5
+      })
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('saves appearance changes', async () => {
+    const onClose = vi.fn()
+    const onSave = vi.fn(async () => undefined)
+
+    render(
+      <SettingsModal
+        isOpen={true}
+        config={baseConfig}
+        onClose={onClose}
+        onSave={onSave}
+      />
+    )
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Appearance' }), {
+      target: { value: 'light' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({
+        repoRoots: ['/Users/me/projects/frontend2'],
+        discoveryMode: 'both',
+        explicitPatterns: ['**/.copilot/**/*.json'],
+        appearance: 'light',
+        syncMode: 'manual',
+        backgroundSyncIntervalMinutes: 10
       })
       expect(onClose).toHaveBeenCalledTimes(1)
     })

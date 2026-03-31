@@ -17,6 +17,11 @@ export const registerIpcHandlers = (
     return configService.load()
   })
 
+  ipcMain.on('config:get-bootstrap-appearance', event => {
+    logInfo('IPC config:get-bootstrap-appearance')
+    event.returnValue = configService.getCachedAppearance()
+  })
+
   ipcMain.handle('config:save', async (_event, config: AppConfig) => {
     logInfo('IPC config:save', {
       repoRoots: config.repoRoots.length,

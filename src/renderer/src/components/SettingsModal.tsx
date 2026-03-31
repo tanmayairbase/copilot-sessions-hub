@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import type { AppConfig, DiscoveryMode, SyncMode } from '@shared/types'
+import type {
+  AppConfig,
+  AppearancePreference,
+  DiscoveryMode,
+  SyncMode
+} from '@shared/types'
 
 interface Props {
   isOpen: boolean
@@ -12,6 +17,7 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
   const [repoRoots, setRepoRoots] = useState('')
   const [explicitPatterns, setExplicitPatterns] = useState('')
   const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode>('both')
+  const [appearance, setAppearance] = useState<AppearancePreference>('system')
   const [syncMode, setSyncMode] = useState<SyncMode>('manual')
   const [backgroundSyncIntervalMinutes, setBackgroundSyncIntervalMinutes] =
     useState('10')
@@ -26,6 +32,7 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
     setRepoRoots(config.repoRoots.join('\n'))
     setExplicitPatterns(config.explicitPatterns.join('\n'))
     setDiscoveryMode(config.discoveryMode)
+    setAppearance(config.appearance)
     setSyncMode(config.syncMode)
     setBackgroundSyncIntervalMinutes(
       String(config.backgroundSyncIntervalMinutes)
@@ -50,6 +57,7 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
           .map(item => item.trim())
           .filter(Boolean),
         discoveryMode,
+        appearance,
         syncMode,
         backgroundSyncIntervalMinutes: Math.max(
           1,
@@ -69,11 +77,26 @@ export const SettingsModal = ({ isOpen, config, onClose, onSave }: Props) => {
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Sync settings"
+      aria-label="App settings"
     >
       <div className="modal">
-        <h3>Sync Settings</h3>
-        <p>This controls where session sync looks for data.</p>
+        <h3>Settings</h3>
+        <p>Control app appearance and where session sync looks for data.</p>
+
+        <label>
+          Appearance
+          <select
+            value={appearance}
+            onChange={event =>
+              setAppearance(event.target.value as AppearancePreference)
+            }
+            aria-label="Appearance"
+          >
+            <option value="system">Match system</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
 
         <label>
           Repository roots (one per line)

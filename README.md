@@ -145,6 +145,7 @@ Config shape:
 {
   "repoRoots": ["/absolute/path/to/repo"],
   "discoveryMode": "both",
+  "appearance": "system",
   "syncMode": "manual",
   "backgroundSyncIntervalMinutes": 10,
   "explicitPatterns": [
@@ -158,6 +159,7 @@ Config shape:
 - `discoveryMode: "autodiscovery"` uses built-in patterns.
 - `discoveryMode: "explicit"` uses only `explicitPatterns`.
 - `discoveryMode: "both"` combines both.
+- `appearance: "system"` follows the OS theme, while `"light"` and `"dark"` force the app theme.
 - `syncMode: "manual"` keeps sync user-triggered only.
 - `syncMode: "manual-plus-background"` enables periodic background sync.
 - `backgroundSyncIntervalMinutes` controls periodic sync cadence (1-1440).

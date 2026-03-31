@@ -33,6 +33,7 @@ const config: AppConfig = {
   repoRoots: ['/repos/a'],
   discoveryMode: 'both',
   explicitPatterns: [],
+  appearance: 'light',
   syncMode: 'manual',
   backgroundSyncIntervalMinutes: 10
 }
@@ -188,5 +189,48 @@ describe('App sync detail refresh', () => {
 
     setIntervalSpy.mockRestore()
     clearIntervalSpy.mockRestore()
+  })
+
+  it('applies light theme and skips sync when only appearance changes', async () => {
+    const darkConfig: AppConfig = {
+      ...config,
+      appearance: 'dark'
+    }
+
+    const api: RendererApi = {
+      getConfig: vi.fn(async () => config),
+      saveConfig: vi.fn(async () => darkConfig),
+      openConfigFile: vi.fn(async () => undefined),
+      syncSessions: vi.fn(async () => syncResult),
+      listSessions: vi.fn(async () => [baseSession]),
+      getSessionDetail: vi.fn(async () => buildDetail(1)),
+      openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
+      setSessionArchived: vi.fn(async () => null),
+      setMessageStarred: vi.fn(async () => null),
+      listStarredMessages: vi.fn(async () => [])
+    }
+
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe('light')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Appearance' }), {
+      target: { value: 'dark' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(api.saveConfig).toHaveBeenCalledWith(darkConfig)
+      expect(screen.getByText('Settings saved.')).toBeTruthy()
+    })
+
+    expect(api.syncSessions).not.toHaveBeenCalled()
+    expect(document.documentElement.dataset.theme).toBe('dark')
   })
 })

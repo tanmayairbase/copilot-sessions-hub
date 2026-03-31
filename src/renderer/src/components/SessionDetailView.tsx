@@ -9,7 +9,11 @@ import React, {
 import AnsiToHtml from 'ansi-to-html'
 import { marked } from 'marked'
 import { normalizeExternalUrl } from '@shared/links'
-import type { SessionDetail, SessionExecutionMode, SessionMessage } from '@shared/types'
+import type {
+  SessionDetail,
+  SessionExecutionMode,
+  SessionMessage
+} from '@shared/types'
 import {
   formatMinuteKeyIST,
   formatSessionOrigin,
@@ -17,12 +21,15 @@ import {
   normalizeModelLabel
 } from '@shared/format'
 
-const ansiConverter = new AnsiToHtml({
-  fg: '#e6edf3',
-  bg: '#161b22',
-  newline: true,
-  escapeXML: true
-})
+type TranscriptTheme = 'light' | 'dark'
+
+const createAnsiConverter = (theme: TranscriptTheme): AnsiToHtml =>
+  new AnsiToHtml({
+    fg: theme === 'light' ? '#172033' : '#e6edf3',
+    bg: theme === 'light' ? '#f8fafc' : '#161b22',
+    newline: true,
+    escapeXML: true
+  })
 
 const normalizeRenderedLinks = (html: string): string => {
   if (typeof document === 'undefined') {
@@ -52,15 +59,8 @@ const normalizeRenderedLinks = (html: string): string => {
 const renderMarkdownContent = (content: string): string =>
   normalizeRenderedLinks(marked.parse(content, { breaks: true }) as string)
 
-const renderAssistantContent = (content: string): string => {
-  if (content.includes('\u001b[')) {
-    return `<pre class="ansi-output">${ansiConverter.toHtml(content)}</pre>`
-  }
-
-  return renderMarkdownContent(content)
-}
-
-const renderUserContent = (content: string): string => renderMarkdownContent(content)
+const renderUserContent = (content: string): string =>
+  renderMarkdownContent(content)
 const DETAIL_CHUNK_SIZE = 220
 const SCROLL_CONTROL_EDGE_THRESHOLD = 28
 const SCROLL_CONTROL_REVEAL_THRESHOLD = 140
@@ -106,6 +106,7 @@ const getScrollControlAction = (
 
 interface Props {
   detail: SessionDetail | null
+  theme?: TranscriptTheme
   onCopySessionId?: (sessionId: string) => Promise<void> | void
   onToggleMessageStar?: (
     sessionId: string,
@@ -215,11 +216,13 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
 
 export const SessionDetailView = ({
   detail,
+  theme = 'dark',
   onCopySessionId,
   onToggleMessageStar,
   focusMessageId,
   onFocusedMessageConsumed
 }: Props) => {
+  const ansiConverter = useMemo(() => createAnsiConverter(theme), [theme])
   const threadRef = useRef<HTMLDivElement | null>(null)
   const autoScrolledSessionIdRef = useRef<string | null>(null)
   const lastThreadScrollTopRef = useRef(0)
@@ -287,6 +290,17 @@ export const SessionDetailView = ({
     return groupedMessages.slice(groupedMessages.length - visibleCount)
   }, [groupedMessages, visibleCount])
 
+  const renderAssistantContent = useCallback(
+    (content: string): string => {
+      if (content.includes('\u001b[')) {
+        return `<pre class="ansi-output">${ansiConverter.toHtml(content)}</pre>`
+      }
+
+      return renderMarkdownContent(content)
+    },
+    [ansiConverter]
+  )
+
   useLayoutEffect(() => {
     if (!detail) {
       autoScrolledSessionIdRef.current = null
@@ -298,7 +312,10 @@ export const SessionDetailView = ({
       return
     }
 
-    const initialVisibleCount = Math.min(groupedMessages.length, DETAIL_CHUNK_SIZE)
+    const initialVisibleCount = Math.min(
+      groupedMessages.length,
+      DETAIL_CHUNK_SIZE
+    )
     if (visibleCount !== initialVisibleCount) {
       return
     }
@@ -455,10 +472,14 @@ export const SessionDetailView = ({
                   type="button"
                   className={`message-star ${message.hasStarredMessage ? 'active' : ''}`}
                   aria-label={
-                    message.hasStarredMessage ? 'Unstar message' : 'Star message'
+                    message.hasStarredMessage
+                      ? 'Unstar message'
+                      : 'Star message'
                   }
                   title={
-                    message.hasStarredMessage ? 'Unstar message' : 'Star message'
+                    message.hasStarredMessage
+                      ? 'Unstar message'
+                      : 'Star message'
                   }
                   onClick={() => {
                     void onToggleMessageStar?.(
@@ -542,10 +563,14 @@ export const SessionDetailView = ({
               type="button"
               className={`message-thread-scroll-button ${scrollControlAction === 'top' ? 'message-thread-scroll-button-up' : ''}`}
               aria-label={
-                scrollControlAction === 'top' ? 'Back to top' : 'Scroll to bottom'
+                scrollControlAction === 'top'
+                  ? 'Back to top'
+                  : 'Scroll to bottom'
               }
               title={
-                scrollControlAction === 'top' ? 'Back to top' : 'Scroll to bottom'
+                scrollControlAction === 'top'
+                  ? 'Back to top'
+                  : 'Scroll to bottom'
               }
               onClick={
                 scrollControlAction === 'top'

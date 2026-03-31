@@ -15,6 +15,7 @@ const appConfigSchema = z.object({
   repoRoots: z.array(z.string()).default([]),
   discoveryMode: z.enum(['autodiscovery', 'explicit', 'both']).default('both'),
   explicitPatterns: z.array(z.string()).default(defaultPatterns),
+  appearance: z.enum(['system', 'light', 'dark']).default('system'),
   syncMode: z.enum(['manual', 'manual-plus-background']).default('manual'),
   backgroundSyncIntervalMinutes: z.number().int().default(10)
 })
@@ -34,6 +35,8 @@ const defaultRoots = [
 ].map(expandHome)
 
 export class ConfigService {
+  private cachedConfig: AppConfig | null = null
+
   constructor(private readonly configPath: string) {}
 
   private normalizeConfig(config: AppConfig): AppConfig {
@@ -46,12 +49,16 @@ export class ConfigService {
         ? config.explicitPatterns
         : defaultPatterns
     const interval = Number.isFinite(config.backgroundSyncIntervalMinutes)
-      ? Math.max(1, Math.min(1440, Math.trunc(config.backgroundSyncIntervalMinutes)))
+      ? Math.max(
+          1,
+          Math.min(1440, Math.trunc(config.backgroundSyncIntervalMinutes))
+        )
       : 10
     return {
       ...config,
       repoRoots,
       explicitPatterns,
+      appearance: config.appearance ?? 'system',
       syncMode: config.syncMode ?? 'manual',
       backgroundSyncIntervalMinutes: interval
     }
@@ -83,6 +90,7 @@ export class ConfigService {
         discoveryMode: normalized.discoveryMode,
         explicitPatterns: normalized.explicitPatterns.length
       })
+      this.cachedConfig = normalized
       return normalized
     } catch (error) {
       logWarn('Config missing or invalid, creating fallback config', {
@@ -93,6 +101,7 @@ export class ConfigService {
         repoRoots: defaultRoots,
         discoveryMode: 'both',
         explicitPatterns: defaultPatterns,
+        appearance: 'system',
         syncMode: 'manual',
         backgroundSyncIntervalMinutes: 10
       }
@@ -123,6 +132,7 @@ export class ConfigService {
         discoveryMode: normalized.discoveryMode,
         explicitPatterns: normalized.explicitPatterns.length
       })
+      this.cachedConfig = normalized
       return normalized
     } catch (error) {
       logError('Failed to save config', {
@@ -135,5 +145,9 @@ export class ConfigService {
 
   getPath(): string {
     return this.configPath
+  }
+
+  getCachedAppearance(): AppConfig['appearance'] {
+    return this.cachedConfig?.appearance ?? 'system'
   }
 }

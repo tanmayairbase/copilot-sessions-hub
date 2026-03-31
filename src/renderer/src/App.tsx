@@ -8,6 +8,7 @@ import React, {
 } from 'react'
 import type {
   AppConfig,
+  AppearancePreference,
   RendererApi,
   SessionDetail,
   SessionSource,
@@ -41,6 +42,9 @@ const SEARCH_DEBOUNCE_MS = 140
 const DEFAULT_BACKGROUND_SYNC_INTERVAL_MINUTES = 10
 const MIN_BACKGROUND_SYNC_INTERVAL_MINUTES = 1
 const MAX_BACKGROUND_SYNC_INTERVAL_MINUTES = 1440
+const SYSTEM_DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)'
+
+type ResolvedTheme = 'light' | 'dark'
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value))
@@ -90,7 +94,9 @@ const syncPriority = (source: SyncSource): number => {
   }
 }
 
-const normalizeBackgroundIntervalMinutes = (value: number | undefined): number =>
+const normalizeBackgroundIntervalMinutes = (
+  value: number | undefined
+): number =>
   Math.max(
     MIN_BACKGROUND_SYNC_INTERVAL_MINUTES,
     Math.min(
@@ -100,6 +106,36 @@ const normalizeBackgroundIntervalMinutes = (value: number | undefined): number =
         : DEFAULT_BACKGROUND_SYNC_INTERVAL_MINUTES
     )
   )
+
+const resolveTheme = (
+  appearance: AppearancePreference,
+  prefersDark: boolean
+): ResolvedTheme =>
+  appearance === 'system' ? (prefersDark ? 'dark' : 'light') : appearance
+
+const areArraysEqual = (left: string[], right: string[]): boolean =>
+  left.length === right.length &&
+  left.every((value, index) => value === right[index])
+
+const shouldTriggerSyncForConfigChange = (
+  current: AppConfig | null,
+  next: AppConfig
+): boolean => {
+  if (!current) {
+    return true
+  }
+
+  return (
+    current.discoveryMode !== next.discoveryMode ||
+    current.syncMode !== next.syncMode ||
+    normalizeBackgroundIntervalMinutes(
+      current.backgroundSyncIntervalMinutes
+    ) !==
+      normalizeBackgroundIntervalMinutes(next.backgroundSyncIntervalMinutes) ||
+    !areArraysEqual(current.repoRoots, next.repoRoots) ||
+    !areArraysEqual(current.explicitPatterns, next.explicitPatterns)
+  )
+}
 
 export const App = () => {
   const apiRef = useMemo(
@@ -122,6 +158,9 @@ export const App = () => {
   const [focusMessageId, setFocusMessageId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+    document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
+  )
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
   const [config, setConfig] = useState<AppConfig | null>(null)
@@ -171,6 +210,44 @@ export const App = () => {
   useEffect(() => {
     searchQueryRef.current = searchQuery
   }, [searchQuery])
+
+  useEffect(() => {
+    if (!config) {
+      return
+    }
+
+    const mediaQuery =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia(SYSTEM_DARK_MEDIA_QUERY)
+        : null
+    const applyResolvedTheme = (): void => {
+      const nextTheme = resolveTheme(
+        config.appearance,
+        mediaQuery?.matches ?? false
+      )
+      const root = document.documentElement
+      root.dataset.theme = nextTheme
+      root.style.colorScheme = nextTheme
+      setResolvedTheme(current => (current === nextTheme ? current : nextTheme))
+      uiLog('Applied renderer theme', {
+        appearance: config.appearance,
+        resolvedTheme: nextTheme
+      })
+    }
+
+    applyResolvedTheme()
+    if (config.appearance !== 'system' || !mediaQuery) {
+      return
+    }
+
+    const onChange = (): void => {
+      applyResolvedTheme()
+    }
+    mediaQuery.addEventListener('change', onChange)
+    return () => {
+      mediaQuery.removeEventListener('change', onChange)
+    }
+  }, [config])
 
   const refreshList = useCallback(
     async (
@@ -257,7 +334,8 @@ export const App = () => {
         setConfig(loadedConfig)
         uiLog('Config loaded in renderer', {
           repoRoots: loadedConfig.repoRoots.length,
-          discoveryMode: loadedConfig.discoveryMode
+          discoveryMode: loadedConfig.discoveryMode,
+          appearance: loadedConfig.appearance
         })
         await refreshList('', { refreshAllStars: true })
       } catch (error) {
@@ -302,14 +380,16 @@ export const App = () => {
     }
 
     const startedAt = performance.now()
-    void refreshList(debouncedSearchQuery).then(() => {
-      uiLog('Search refresh completed', {
-        query: debouncedSearchQuery,
-        durationMs: Math.round(performance.now() - startedAt)
+    void refreshList(debouncedSearchQuery)
+      .then(() => {
+        uiLog('Search refresh completed', {
+          query: debouncedSearchQuery,
+          durationMs: Math.round(performance.now() - startedAt)
+        })
       })
-    }).catch(error => {
-      setToast(`Search failed: ${(error as Error).message}`)
-    })
+      .catch(error => {
+        setToast(`Search failed: ${(error as Error).message}`)
+      })
   }, [debouncedSearchQuery, refreshList])
 
   const repositoryOptions = useMemo(
@@ -564,7 +644,7 @@ export const App = () => {
           )
         } else if (source === 'settings-save') {
           setToast(
-            `Config saved and synced: ${result.sessionsImported} sessions imported from ${result.filesScanned} files.`
+            `Settings saved and synced: ${result.sessionsImported} sessions imported from ${result.filesScanned} files.`
           )
         } else {
           setBackgroundSyncStatus({
@@ -729,16 +809,25 @@ export const App = () => {
         repoRoots: next.repoRoots.length,
         discoveryMode: next.discoveryMode,
         explicitPatterns: next.explicitPatterns.length,
+        appearance: next.appearance,
         syncMode: next.syncMode,
         backgroundSyncIntervalMinutes: next.backgroundSyncIntervalMinutes
       })
       const saved = await ensureApi().saveConfig(next)
+      const shouldSync = shouldTriggerSyncForConfigChange(config, saved)
       setConfig(saved)
-      setToast('Config saved. Syncing...')
-      uiLog('Config saved, triggering sync', {
-        repoRoots: saved.repoRoots.length
-      })
-      await requestSync('settings-save')
+      if (shouldSync) {
+        setToast('Settings saved. Syncing...')
+        uiLog('Settings saved, triggering sync', {
+          repoRoots: saved.repoRoots.length
+        })
+        await requestSync('settings-save')
+      } else {
+        setToast('Settings saved.')
+        uiLog('Settings saved without sync', {
+          appearance: saved.appearance
+        })
+      }
     } catch (error) {
       const message = `Config save failed: ${(error as Error).message}`
       setToast(message)
@@ -824,7 +913,10 @@ export const App = () => {
     if (backgroundSyncStatus.state === 'queued') {
       return 'Background sync queued...'
     }
-    if (backgroundSyncStatus.state === 'error' && backgroundSyncStatus.lastError) {
+    if (
+      backgroundSyncStatus.state === 'error' &&
+      backgroundSyncStatus.lastError
+    ) {
       return `Background sync failed: ${backgroundSyncStatus.lastError}`
     }
     if (backgroundSyncStatus.lastSyncedAt) {
@@ -909,6 +1001,7 @@ export const App = () => {
 
         <SessionDetailView
           detail={selectedDetail}
+          theme={resolvedTheme}
           onCopySessionId={onCopySessionId}
           onToggleMessageStar={(sessionId, messageId, starred) =>
             void onToggleMessageStar(sessionId, messageId, starred)

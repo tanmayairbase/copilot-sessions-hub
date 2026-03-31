@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { ConfigService } from './config'
 import { registerExternalLinkHandlers } from './external-links'
 import { registerIpcHandlers } from './ipc'
@@ -14,6 +14,19 @@ const currentDir = fileURLToPath(new URL('.', import.meta.url))
 const devIconPath = (): string =>
   join(process.cwd(), 'build/icons/robot-512.png')
 app.setName(APP_DISPLAY_NAME)
+
+const resolveTheme = (
+  appearance: 'system' | 'light' | 'dark'
+): 'light' | 'dark' =>
+  appearance === 'system'
+    ? nativeTheme.shouldUseDarkColors
+      ? 'dark'
+      : 'light'
+    : appearance
+
+const getWindowBackgroundColor = (
+  appearance: 'system' | 'light' | 'dark'
+): string => (resolveTheme(appearance) === 'dark' ? '#0d1117' : '#f5f7fb')
 
 const configureUserDataPath = (): string => {
   const target = join(app.getPath('appData'), CANONICAL_USER_DATA_DIR)
@@ -78,7 +91,9 @@ const migrateLegacyUserData = (targetDir: string): void => {
   }
 }
 
-const createWindow = async (): Promise<void> => {
+const createWindow = async (
+  appearance: 'system' | 'light' | 'dark'
+): Promise<void> => {
   logInfo('Creating browser window')
   const iconPath = devIconPath()
   const hasCustomIcon = existsSync(iconPath)
@@ -89,6 +104,7 @@ const createWindow = async (): Promise<void> => {
     minHeight: 640,
     title: APP_DISPLAY_NAME,
     icon: hasCustomIcon ? iconPath : undefined,
+    backgroundColor: getWindowBackgroundColor(appearance),
     webPreferences: {
       preload: join(currentDir, '../preload/index.mjs'),
       sandbox: false,
@@ -96,7 +112,9 @@ const createWindow = async (): Promise<void> => {
       nodeIntegration: false
     }
   })
-  registerExternalLinkHandlers(window.webContents, url => shell.openExternal(url))
+  registerExternalLinkHandlers(window.webContents, url =>
+    shell.openExternal(url)
+  )
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     await window.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -132,13 +150,14 @@ app.whenReady().then(async () => {
   const configService = new ConfigService(
     join(app.getPath('userData'), 'config.json')
   )
+  const initialConfig = await configService.load()
 
   registerIpcHandlers(storage, configService)
-  await createWindow()
+  await createWindow(initialConfig.appearance)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      void createWindow()
+      void createWindow(configService.getCachedAppearance())
     }
   })
 })

@@ -1,5 +1,54 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppConfig, RendererApi } from '../shared/types'
+import type {
+  AppConfig,
+  AppearancePreference,
+  RendererApi
+} from '../shared/types'
+
+const SYSTEM_DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)'
+
+interface PreloadThemeGlobals {
+  matchMedia?: (query: string) => { matches: boolean }
+  document?: {
+    documentElement?: {
+      dataset: Record<string, string>
+      style: { colorScheme: string }
+    } | null
+  }
+}
+
+const preloadGlobals = globalThis as typeof globalThis & PreloadThemeGlobals
+
+const isAppearancePreference = (
+  value: unknown
+): value is AppearancePreference =>
+  value === 'system' || value === 'light' || value === 'dark'
+
+const resolveTheme = (appearance: AppearancePreference): 'light' | 'dark' =>
+  appearance === 'system'
+    ? typeof preloadGlobals.matchMedia === 'function' &&
+      preloadGlobals.matchMedia(SYSTEM_DARK_MEDIA_QUERY).matches
+      ? 'dark'
+      : 'light'
+    : appearance
+
+const applyBootstrapTheme = (appearance: AppearancePreference): void => {
+  const root = preloadGlobals.document?.documentElement
+  if (!root) {
+    return
+  }
+
+  const resolved = resolveTheme(appearance)
+  root.dataset.theme = resolved
+  root.style.colorScheme = resolved
+}
+
+const bootstrapAppearance = ipcRenderer.sendSync(
+  'config:get-bootstrap-appearance'
+)
+applyBootstrapTheme(
+  isAppearancePreference(bootstrapAppearance) ? bootstrapAppearance : 'system'
+)
 
 const api: RendererApi = {
   getConfig: async () => ipcRenderer.invoke('config:get'),

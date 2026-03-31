@@ -3,11 +3,13 @@ export type SessionExecutionMode = 'plan' | 'autopilot'
 
 export type DiscoveryMode = 'autodiscovery' | 'explicit' | 'both'
 export type SyncMode = 'manual' | 'manual-plus-background'
+export type AppearancePreference = 'system' | 'light' | 'dark'
 
 export interface AppConfig {
   repoRoots: string[]
   discoveryMode: DiscoveryMode
   explicitPatterns: string[]
+  appearance: AppearancePreference
   syncMode: SyncMode
   backgroundSyncIntervalMinutes: number
 }
