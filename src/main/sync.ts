@@ -225,6 +225,7 @@ export const syncSessions = async (
     filesScanned: 0,
     sessionsImported: 0,
     skippedFiles: 0,
+    durationSeconds: 0,
     errors: []
   }
 
@@ -429,8 +430,16 @@ export const syncSessions = async (
     result.errors = result.errors.slice(0, 20)
   }
 
+  result.durationSeconds = Math.max(
+    1,
+    Math.round((performance.now() - syncStartedAt) / 1000)
+  )
+
+  const totalDurationMs = Math.round(performance.now() - syncStartedAt)
+
   logInfo('Sync completed', {
-    durationMs: Math.round(performance.now() - syncStartedAt),
+    durationMs: totalDurationMs,
+    durationSeconds: result.durationSeconds,
     scanDurationMs,
     parseDurationMs,
     dedupeDurationMs,

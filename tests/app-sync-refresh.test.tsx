@@ -5,7 +5,6 @@ import {
   screen,
   waitFor
 } from '@testing-library/react'
-import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AppConfig,
@@ -48,6 +47,7 @@ const syncResult: SyncResult = {
   filesScanned: 1,
   sessionsImported: 1,
   skippedFiles: 0,
+  durationSeconds: 1,
   errors: []
 }
 
@@ -93,7 +93,8 @@ describe('App sync detail refresh', () => {
       listStarredMessages: vi.fn(async () => [])
     }
 
-    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions = api
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
 
     render(<App />)
 
@@ -106,6 +107,12 @@ describe('App sync detail refresh', () => {
     await waitFor(() => {
       expect(screen.getByText('Messages: 2')).toBeTruthy()
     })
+
+    expect(
+      screen.getByText(
+        'Last sync: imported 1 sessions, scanned 1 files, skipped 0, in 1s'
+      )
+    ).toBeTruthy()
 
     expect(api.syncSessions).toHaveBeenCalledTimes(1)
     expect(api.getSessionDetail).toHaveBeenCalledTimes(2)
@@ -152,7 +159,8 @@ describe('App sync detail refresh', () => {
       listStarredMessages: vi.fn(async () => [])
     }
 
-    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions = api
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
     render(<App />)
 
     await waitFor(() => {

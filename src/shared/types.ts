@@ -89,6 +89,7 @@ export interface SyncResult {
   filesScanned: number
   sessionsImported: number
   skippedFiles: number
+  durationSeconds: number
   errors: string[]
 }
 

@@ -925,7 +925,7 @@ export const App = () => {
             <span>
               Last sync: imported {syncResult.sessionsImported} sessions,
               scanned {syncResult.filesScanned} files, skipped{' '}
-              {syncResult.skippedFiles}
+              {syncResult.skippedFiles}, in {syncResult.durationSeconds}s
             </span>
           )}
           {syncErrors && <span>{syncErrors}</span>}
