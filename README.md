@@ -1,8 +1,26 @@
-# Copilot Sessions Hub
+<p align="center">
+  <img src="build/icons/robot-512.png" alt="Copilot Sessions Hub logo" width="140" />
+</p>
 
-Desktop Electron app (TypeScript + Node 24) that aggregates Copilot sessions from multiple repositories, provides full-text search in a resizable left sidebar, and renders selected session details in a chat-style main pane.
+<h1 align="center">Copilot Sessions Hub</h1>
 
-<img width="1398" height="901" alt="image" src="https://github.com/user-attachments/assets/274fa0f2-f7e5-48ab-b15c-183f029b8f09" />
+<p align="center">
+  Desktop Electron app (TypeScript + Node 24) that aggregates Copilot sessions from multiple repositories,
+  provides full-text search in a resizable left sidebar, and renders selected session details in a chat-style
+  main pane.
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#documentation">Documentation</a> •
+  <a href="#development">Development</a> •
+  <a href="#production-buildpackage">Packaging</a> •
+  <a href="#configuration">Configuration</a>
+</p>
+
+<p align="center">
+  <img width="1398" height="901" alt="Copilot Sessions Hub screenshot" src="https://github.com/user-attachments/assets/274fa0f2-f7e5-48ab-b15c-183f029b8f09" />
+</p>
 
 ## Pain points this app addresses
 
