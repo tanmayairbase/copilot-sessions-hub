@@ -213,6 +213,33 @@ describe('SessionDetailView grouping', () => {
     expect(links[1].getAttribute('rel')).toBe('noopener noreferrer')
   })
 
+  it('preserves multiline user prompts as readable lists', () => {
+    const multilineDetail: SessionDetail = {
+      ...detail,
+      messages: [
+        {
+          id: 'm-multiline-user',
+          sessionId: 's1',
+          role: 'user',
+          content:
+            "Here's what I want you to do next:\n- run the typecheck again\n- group failures by CODEOWNERS\n- create subtasks",
+          format: 'markdown',
+          timestamp: '2026-03-11T10:04:00.000Z'
+        }
+      ]
+    }
+
+    const { container } = render(<SessionDetailView detail={multilineDetail} />)
+    const userBubble = screen.getByLabelText('user message')
+    const items = userBubble.querySelectorAll('li')
+
+    expect(screen.getByText("Here's what I want you to do next:")).toBeTruthy()
+    expect(items).toHaveLength(3)
+    expect(container.textContent).toContain('run the typecheck again')
+    expect(container.textContent).toContain('group failures by CODEOWNERS')
+    expect(container.textContent).toContain('create subtasks')
+  })
+
   it('shows a single contextual floating scroll pill for long threads', async () => {
     const { container } = render(<SessionDetailView detail={detail} />)
     const thread = container.querySelector('.message-thread') as HTMLDivElement

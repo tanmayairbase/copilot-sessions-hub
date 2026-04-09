@@ -214,6 +214,135 @@ describe('parseSessionArtifacts', () => {
     expect(parsed).toHaveLength(1)
     expect(parsed[0].session.source).toBe('cli')
     expect(parsed[0].session.agent).toBe('any-removal-first-migration-agent')
+    expect(parsed[0].messages[0]?.content).toBe('let us continue')
+  })
+
+  it('prefers multiline transformed user content when it matches collapsed content', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-events-multiline-user-content',
+          producer: 'copilot-agent',
+          copilotVersion: '1.0.21',
+          startTime: '2026-03-10T10:00:00.000Z',
+          context: { cwd: '/tmp/repo-events' }
+        },
+        timestamp: '2026-03-10T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: {
+          content:
+            "The typecheck failures are fine for now. Here's what I want you to do next: - run the typecheck again - group the failures by CODEOWNERS - create subtasks after that",
+          transformedContent:
+            "<current_datetime>2026-03-10T10:00:01.000Z</current_datetime>\n\n[[PLAN]] The typecheck failures are fine for now. Here's what I want you to do next:\n- run the typecheck again\n- group the failures by CODEOWNERS\n- create subtasks after that"
+        },
+        timestamp: '2026-03-10T10:00:01.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Got it.' },
+        timestamp: '2026-03-10T10:00:05.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-multiline-user-content/events.jsonl',
+      repoRoot: '/tmp/repo-events',
+      source: 'cli'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].messages[0]?.content).toBe(
+      "The typecheck failures are fine for now. Here's what I want you to do next:\n- run the typecheck again\n- group the failures by CODEOWNERS\n- create subtasks after that"
+    )
+    expect(parsed[0].messages[0]?.mode).toBe('plan')
+  })
+
+  it('reconstructs flattened plan request bullets from transformed content', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-events-flattened-plan-request',
+          producer: 'copilot-agent',
+          copilotVersion: '1.0.21',
+          startTime: '2026-03-10T10:00:00.000Z',
+          context: { cwd: '/tmp/repo-events' }
+        },
+        timestamp: '2026-03-10T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: {
+          content:
+            "The typecheck failures are fine for now. I reverted your change to make it pass forcefully. Here's what I want you to do next: - run the typecheck again, from the result, prepare a list of files that have typecheck failures - these will ALL be test files only. - next, I want you to use CODEOWNERS file to group them based on which code owners group owns which set of files.. and save that to a .txt file for my reference later as well - after that, for each group, I want you to create JIRA tickets in form of subtasks in the FG-176 ticket using acli.",
+          transformedContent:
+            "<current_datetime>2026-03-10T10:00:01.000Z</current_datetime>\n\n[[PLAN]] I want to create an implementation plan. Please:\n1. Analyze the codebase to understand the current state\n2. Ask clarifying questions if my request is ambiguous\n3. Create a structured plan and save it to the plan file in the session folder\n\nMy request: The typecheck failures are fine for now. I reverted your change to make it pass forcefully. Here's what I want you to do next: - run the typecheck again, from the result, prepare a list of files that have typecheck failures - these will ALL be test files only. - next, I want you to use CODEOWNERS file to group them based on which code owners group owns which set of files.. and save that to a .txt file for my reference later as well - after that, for each group, I want you to create JIRA tickets in form of subtasks in the FG-176 ticket using acli."
+        },
+        timestamp: '2026-03-10T10:00:01.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Got it.' },
+        timestamp: '2026-03-10T10:00:05.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-flattened-plan-request/events.jsonl',
+      repoRoot: '/tmp/repo-events',
+      source: 'cli'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].messages[0]?.content).toBe(
+      "The typecheck failures are fine for now. I reverted your change to make it pass forcefully. Here's what I want you to do next:\n- run the typecheck again, from the result, prepare a list of files that have typecheck failures\n- these will ALL be test files only.\n- next, I want you to use CODEOWNERS file to group them based on which code owners group owns which set of files.. and save that to a .txt file for my reference later as well\n- after that, for each group, I want you to create JIRA tickets in form of subtasks in the FG-176 ticket using acli."
+    )
+    expect(parsed[0].messages[0]?.mode).toBe('plan')
+  })
+
+  it('reconstructs readable paragraphs for long flattened plan requests', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-events-flattened-plan-paragraphs',
+          producer: 'copilot-agent',
+          copilotVersion: '1.0.21',
+          startTime: '2026-03-10T10:00:00.000Z',
+          context: { cwd: '/tmp/repo-events' }
+        },
+        timestamp: '2026-03-10T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: {
+          content:
+            "We are working on rebranding \"Airbase\" with \"Paylocity for Finance\" and the current task at hand is for logos/icons. The audit was done for this re-brand a few weeks ago and it sits in the src/docs directory. I want us to explore how we can prepare a small framework of sorts which can help us switch to using the new logos instead of old. Another thing is, we have an LD flag added for this which will help us decide. There's one caveat though, I think on login pages, card share page and other such pages we won't be able to use launchdarkly flags IIRC. Thinking out loud here -> If stage.airbase.io or airbase.pages.dev URLs, then show PCTY4FIN icons otherwise Airbase - this is for testing on staging/review app. Not sure, validate this thought while at it. let's prepare a plan for this, /grill-me with questions",
+          transformedContent:
+            "<current_datetime>2026-03-10T10:00:01.000Z</current_datetime>\n\n[[PLAN]] I want to create an implementation plan. Please:\n1. Analyze the codebase to understand the current state\n2. Ask clarifying questions if my request is ambiguous\n3. Create a structured plan and save it to the plan file in the session folder\n\nMy request: We are working on rebranding \"Airbase\" with \"Paylocity for Finance\" and the current task at hand is for logos/icons. The audit was done for this re-brand a few weeks ago and it sits in the src/docs directory. I want us to explore how we can prepare a small framework of sorts which can help us switch to using the new logos instead of old. Another thing is, we have an LD flag added for this which will help us decide. There's one caveat though, I think on login pages, card share page and other such pages we won't be able to use launchdarkly flags IIRC. Thinking out loud here -> If stage.airbase.io or airbase.pages.dev URLs, then show PCTY4FIN icons otherwise Airbase - this is for testing on staging/review app. Not sure, validate this thought while at it. let's prepare a plan for this, /grill-me with questions"
+        },
+        timestamp: '2026-03-10T10:00:01.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-flattened-plan-paragraphs/events.jsonl',
+      repoRoot: '/tmp/repo-events',
+      source: 'cli'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].messages[0]?.content).toBe(
+      "We are working on rebranding \"Airbase\" with \"Paylocity for Finance\" and the current task at hand is for logos/icons. The audit was done for this re-brand a few weeks ago and it sits in the src/docs directory. I want us to explore how we can prepare a small framework of sorts which can help us switch to using the new logos instead of old.\n\nAnother thing is, we have an LD flag added for this which will help us decide.\n\nThere's one caveat though, I think on login pages, card share page and other such pages we won't be able to use launchdarkly flags IIRC.\n\nThinking out loud here -> If stage.airbase.io or airbase.pages.dev URLs, then show PCTY4FIN icons otherwise Airbase - this is for testing on staging/review app.\n\nNot sure, validate this thought while at it.\n\nlet's prepare a plan for this, /grill-me with questions"
+    )
+    expect(parsed[0].messages[0]?.format).toBe('markdown')
+    expect(parsed[0].messages[0]?.mode).toBe('plan')
   })
 
   it('detects plan and autopilot modes from CLI events', () => {

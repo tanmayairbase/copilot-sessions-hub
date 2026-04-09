@@ -109,10 +109,134 @@ const inferFormat = (value: string): SessionMessage['format'] => {
   if (value.includes('\u001b[')) {
     return 'ansi'
   }
-  if (/```|^#\s|\n\s*[-*]\s/m.test(value)) {
+  if (/```|^#\s|\n\s*[-*]\s|\n\s*\n/m.test(value)) {
     return 'markdown'
   }
   return 'text'
+}
+
+const normalizeTextForComparison = (value: string): string =>
+  value.replace(/\r\n?/g, '\n').replace(/\s+/g, ' ').trim()
+
+const restoreFlattenedBulletList = (value: string): string => {
+  const normalized = value.replace(/\r\n?/g, '\n').trim()
+  if (normalized.includes('\n')) {
+    return normalized
+  }
+  const bulletSeparators = normalized.match(/\s-\s/g) ?? []
+  if (bulletSeparators.length < 2) {
+    return normalized
+  }
+  return normalized.replace(/\s-\s/g, '\n- ')
+}
+
+const restoreFlattenedPlanParagraphs = (value: string): string => {
+  const normalized = value.replace(/\r\n?/g, '\n').trim()
+  if (normalized.includes('\n') || normalized.length < 280) {
+    return normalized
+  }
+
+  return normalized.replace(
+    /([.?!])\s+(Another thing is\b|There(?:'|’)s one caveat though\b|Thinking out loud here\s*->|Not sure\b|Also\b|However\b|One caveat\b|Separately\b|One more thing\b|Lastly\b|Finally\b|With that said\b|That said\b|For testing\b|For staging\b|On login pages\b|For pages that are not behind auth-wall\b|let'?s prepare\b)/g,
+    '$1\n\n$2'
+  )
+}
+
+const addContentVariant = (variants: Set<string>, value: string): void => {
+  const normalized = value.replace(/\r\n?/g, '\n').trim()
+  if (!normalized) {
+    return
+  }
+  variants.add(normalized)
+  const restored = restoreFlattenedBulletList(normalized)
+  if (restored !== normalized) {
+    variants.add(restored)
+  }
+  const paragraphRestored = restoreFlattenedPlanParagraphs(normalized)
+  if (paragraphRestored !== normalized) {
+    variants.add(paragraphRestored)
+  }
+  if (restored !== normalized) {
+    const restoredParagraphs = restoreFlattenedPlanParagraphs(restored)
+    if (restoredParagraphs !== restored) {
+      variants.add(restoredParagraphs)
+    }
+  }
+}
+
+const extractPlanRequestBody = (value: string): string | null => {
+  const match = value.match(/(?:^|\n\n)My request:\s*([\s\S]*)$/i)
+  return match?.[1]?.trim() || null
+}
+
+const getTransformedUserContentVariants = (value: string): string[] => {
+  const normalized = value.replace(/\r\n?/g, '\n').trim()
+  if (!normalized) {
+    return []
+  }
+
+  const variants = new Set<string>()
+  const withoutMetadata = normalized
+    .replace(
+      /^\s*<current_datetime>[\s\S]*?<\/current_datetime>\s*/i,
+      ''
+    )
+    .replace(/\n*<reminder>[\s\S]*?<\/reminder>\s*/gi, '\n\n')
+    .trim()
+
+  if (withoutMetadata) {
+    addContentVariant(variants, withoutMetadata)
+    addContentVariant(
+      variants,
+      withoutMetadata.replace(/^\[\[PLAN\]\]\s*/, '').trim()
+    )
+    const planRequestBody = extractPlanRequestBody(withoutMetadata)
+    if (planRequestBody) {
+      addContentVariant(variants, planRequestBody)
+    }
+  }
+
+  for (const candidate of [...variants]) {
+    addContentVariant(variants, candidate.replace(/^\[[^\]\n]+\]\s*/, '').trim())
+  }
+
+  return [...variants].filter(Boolean)
+}
+
+const resolveUserMessageContent = (
+  contentValue: unknown,
+  transformedValue: unknown
+): string | null => {
+  const content = firstString(contentValue)
+  const transformed = firstString(transformedValue)
+
+  if (!transformed) {
+    return content
+  }
+
+  const transformedVariants = getTransformedUserContentVariants(transformed)
+  if (!content) {
+    return transformedVariants[0] ?? transformed
+  }
+
+  const normalizedContent = normalizeTextForComparison(content)
+  const matchingVariants = transformedVariants.filter(
+    candidate => normalizeTextForComparison(candidate) === normalizedContent
+  )
+
+  if (matchingVariants.length === 0) {
+    return content
+  }
+
+  return (
+    [...matchingVariants].sort((a, b) => {
+      const newlineDelta = b.split('\n').length - a.split('\n').length
+      if (newlineDelta !== 0) {
+        return newlineDelta
+      }
+      return b.length - a.length
+    })[0] ?? content
+  )
 }
 
 const toIso = (value: unknown, fallback = new Date().toISOString()): string => {
@@ -1258,7 +1382,7 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
       const mode =
         normalizeExecutionMode(payload['agentMode']) ??
         inferPlanModeFromTransformedContent(payload['transformedContent'])
-      const content = firstString(
+      const content = resolveUserMessageContent(
         payload['content'],
         payload['transformedContent']
       )

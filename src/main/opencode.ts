@@ -104,7 +104,7 @@ const inferFormat = (value: string): SessionMessage['format'] => {
   if (value.includes('\u001b[')) {
     return 'ansi'
   }
-  if (/```|^#\s|\n\s*[-*]\s/m.test(value)) {
+  if (/```|^#\s|\n\s*[-*]\s|\n\s*\n/m.test(value)) {
     return 'markdown'
   }
   return 'text'

@@ -21,7 +21,7 @@ import {
 } from './storage'
 
 const MAX_FILE_SIZE_BYTES = 64 * 1024 * 1024
-const ARTIFACT_CACHE_PARSER_VERSION = 4
+const ARTIFACT_CACHE_PARSER_VERSION = 6
 
 const expandHome = (value: string): string =>
   value.startsWith('~/') ? join(homedir(), value.slice(2)) : value
