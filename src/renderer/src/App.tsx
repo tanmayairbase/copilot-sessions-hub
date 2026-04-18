@@ -27,7 +27,8 @@ import { SessionDetailView } from './components/SessionDetailView'
 import {
   SessionListSidebar,
   type ArchivedFilterValue,
-  type StarredFilterValue
+  type StarredFilterValue,
+  type SubagentFilterValue
 } from './components/SessionListSidebar'
 import { SettingsModal } from './components/SettingsModal'
 
@@ -173,6 +174,8 @@ export const App = () => {
   const [archivedFilter, setArchivedFilter] =
     useState<ArchivedFilterValue>('hide')
   const [starredFilter, setStarredFilter] = useState<StarredFilterValue>('all')
+  const [subagentFilter, setSubagentFilter] =
+    useState<SubagentFilterValue>('hide')
   const [backgroundSyncStatus, setBackgroundSyncStatus] =
     useState<BackgroundSyncStatus>({
       state: 'idle',
@@ -476,9 +479,19 @@ export const App = () => {
       if (dateFilter && !matchesIstDatePreset(session.updatedAt, dateFilter)) {
         return false
       }
+      if (subagentFilter === 'hide' && session.isSubagentSession) {
+        return false
+      }
       return true
     })
-  }, [dateFilter, selectedModels, selectedOrigins, selectedRepos, sessions])
+  }, [
+    dateFilter,
+    selectedModels,
+    selectedOrigins,
+    selectedRepos,
+    sessions,
+    subagentFilter
+  ])
 
   const archivedSearchMatches = useMemo(
     () => baseFilteredSessions.filter(session => Boolean(session.userArchived)),
@@ -560,6 +573,7 @@ export const App = () => {
     setDateFilter('')
     setArchivedFilter('hide')
     setStarredFilter('all')
+    setSubagentFilter('hide')
   }, [])
 
   const onSetArchived = useCallback(
@@ -930,7 +944,8 @@ export const App = () => {
     selectedOrigins.length > 0 ||
     Boolean(dateFilter) ||
     archivedFilter !== 'hide' ||
-    starredFilter !== 'all'
+    starredFilter !== 'all' ||
+    subagentFilter !== 'hide'
 
   return (
     <div className="app-root">
@@ -988,6 +1003,8 @@ export const App = () => {
             onArchivedFilterChange={setArchivedFilter}
             starredFilter={starredFilter}
             onStarredFilterChange={setStarredFilter}
+            subagentFilter={subagentFilter}
+            onSubagentFilterChange={setSubagentFilter}
             hasActiveFilters={hasActiveFilters}
           />
         </div>

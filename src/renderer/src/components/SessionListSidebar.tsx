@@ -17,6 +17,7 @@ type OriginFilterValue = SessionSource
 type FilterMenu = 'repository' | 'model' | 'origin' | null
 export type ArchivedFilterValue = 'hide' | 'show' | 'only'
 export type StarredFilterValue = 'all' | 'only'
+export type SubagentFilterValue = 'hide' | 'show'
 
 interface Props {
   sessions: SessionSummary[]
@@ -44,6 +45,8 @@ interface Props {
   onArchivedFilterChange: (value: ArchivedFilterValue) => void
   starredFilter: StarredFilterValue
   onStarredFilterChange: (value: StarredFilterValue) => void
+  subagentFilter: SubagentFilterValue
+  onSubagentFilterChange: (value: SubagentFilterValue) => void
   hasActiveFilters: boolean
 }
 
@@ -366,6 +369,8 @@ export const SessionListSidebar = ({
   onArchivedFilterChange,
   starredFilter,
   onStarredFilterChange,
+  subagentFilter,
+  onSubagentFilterChange,
   hasActiveFilters
 }: Props) => {
   const filterRootRef = useRef<HTMLDivElement>(null)
@@ -610,6 +615,22 @@ export const SessionListSidebar = ({
               >
                 <option value="all">All sessions</option>
                 <option value="only">Only starred</option>
+              </select>
+            </label>
+            <label className="filter-group">
+              <span className="filter-label">Sub-agents</span>
+              <select
+                className="filter-select"
+                value={subagentFilter}
+                onChange={event =>
+                  onSubagentFilterChange(
+                    event.target.value as SubagentFilterValue
+                  )
+                }
+                aria-label="Sub-agents filter"
+              >
+                <option value="hide">Hide sub-agent sessions</option>
+                <option value="show">Show sub-agent sessions</option>
               </select>
             </label>
           </div>

@@ -173,6 +173,7 @@ describe('parseSessionArtifacts', () => {
     expect(parsed).toHaveLength(1)
     expect(parsed[0].session.source).toBe('cli')
     expect(parsed[0].session.agent).toBe('security-upgrade-agent')
+    expect(parsed[0].session.isSubagentSession).toBe(false)
   })
 
   it('detects custom CLI agent from transformed instructions when subagent event is absent', () => {
@@ -214,7 +215,46 @@ describe('parseSessionArtifacts', () => {
     expect(parsed).toHaveLength(1)
     expect(parsed[0].session.source).toBe('cli')
     expect(parsed[0].session.agent).toBe('any-removal-first-migration-agent')
+    expect(parsed[0].session.isSubagentSession).toBe(true)
     expect(parsed[0].messages[0]?.content).toBe('let us continue')
+  })
+
+  it('marks CLI event sessions with session-level parent linkage as sub-agent sessions', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-events-parented',
+          producer: 'copilot-agent',
+          copilotVersion: '1.0.31',
+          startTime: '2026-03-10T10:00:00.000Z',
+          context: { cwd: '/tmp/repo-events' }
+        },
+        timestamp: '2026-03-10T10:00:00.000Z',
+        parentId: 'parent-session-1'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: { content: 'continue the task' },
+        timestamp: '2026-03-10T10:00:01.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Continuing now.' },
+        timestamp: '2026-03-10T10:00:02.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-parented/events.jsonl',
+      repoRoot: '/tmp/repo-events',
+      source: 'cli'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].session.isSubagentSession).toBe(true)
+    expect(parsed[0].session.parentSessionId).toBe('parent-session-1')
   })
 
   it('prefers multiline transformed user content when it matches collapsed content', () => {

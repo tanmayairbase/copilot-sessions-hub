@@ -233,4 +233,59 @@ describe('App sync detail refresh', () => {
     expect(api.syncSessions).not.toHaveBeenCalled()
     expect(document.documentElement.dataset.theme).toBe('dark')
   })
+
+  it('hides sub-agent sessions by default and can show them from filters', async () => {
+    const visibleSession: SessionSummary = {
+      ...baseSession,
+      id: 'session-visible',
+      title: 'Visible session'
+    }
+    const hiddenSubagentSession: SessionSummary = {
+      ...baseSession,
+      id: 'session-subagent',
+      title: 'Hidden sub-agent session',
+      isSubagentSession: true
+    }
+
+    const api: RendererApi = {
+      getConfig: vi.fn(async () => config),
+      saveConfig: vi.fn(async () => config),
+      openConfigFile: vi.fn(async () => undefined),
+      syncSessions: vi.fn(async () => syncResult),
+      listSessions: vi.fn(async () => [visibleSession, hiddenSubagentSession]),
+      getSessionDetail: vi.fn(async sessionId => {
+        const detail = buildDetail(1)
+        return {
+          ...detail,
+          ...(sessionId === hiddenSubagentSession.id
+            ? hiddenSubagentSession
+            : visibleSession),
+          messages: detail.messages
+        }
+      }),
+      openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
+      setSessionArchived: vi.fn(async () => null),
+      setMessageStarred: vi.fn(async () => null),
+      listStarredMessages: vi.fn(async () => [])
+    }
+
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Visible session').length).toBeGreaterThan(0)
+    })
+    expect(screen.queryByText('Hidden sub-agent session')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+    fireEvent.change(screen.getByLabelText('Sub-agents filter'), {
+      target: { value: 'show' }
+    })
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Hidden sub-agent session').length).toBeGreaterThan(0)
+    })
+  })
 })

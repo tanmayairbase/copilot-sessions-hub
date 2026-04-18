@@ -20,6 +20,8 @@ export interface SessionSummary {
   repoPath: string
   title: string
   agent?: string | null
+  isSubagentSession?: boolean
+  parentSessionId?: string | null
   modes?: SessionExecutionMode[]
   latestMode?: SessionExecutionMode | null
   model: string | null

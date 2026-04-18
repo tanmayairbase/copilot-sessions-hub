@@ -67,6 +67,7 @@ const renderSidebar = (
   const onDateFilterChange = vi.fn()
   const onArchivedFilterChange = vi.fn()
   const onStarredFilterChange = vi.fn()
+  const onSubagentFilterChange = vi.fn()
 
   render(
     <SessionListSidebar
@@ -95,6 +96,8 @@ const renderSidebar = (
       onArchivedFilterChange={onArchivedFilterChange}
       starredFilter="all"
       onStarredFilterChange={onStarredFilterChange}
+      subagentFilter="hide"
+      onSubagentFilterChange={onSubagentFilterChange}
       hasActiveFilters={false}
       {...overrides}
     />
@@ -111,7 +114,8 @@ const renderSidebar = (
     onToggleOrigin,
     onDateFilterChange,
     onArchivedFilterChange,
-    onStarredFilterChange
+    onStarredFilterChange,
+    onSubagentFilterChange
   }
 }
 
@@ -241,6 +245,15 @@ describe('SessionListSidebar', () => {
       target: { value: 'only' }
     })
     expect(onStarredFilterChange).toHaveBeenCalledWith('only')
+  })
+
+  it('supports sub-agent filter control', () => {
+    const { onSubagentFilterChange } = renderSidebar()
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+    fireEvent.change(screen.getByLabelText('Sub-agents filter'), {
+      target: { value: 'show' }
+    })
+    expect(onSubagentFilterChange).toHaveBeenCalledWith('show')
   })
 
   it('virtualizes large main session lists while keeping interactions', () => {

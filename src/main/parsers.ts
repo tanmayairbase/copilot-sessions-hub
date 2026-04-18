@@ -464,6 +464,29 @@ const normalizeSession = (
     sourceFromHint(candidate.client) ??
     sourceFromHint(candidate.producer) ??
     inferSource(context.filePath, context.source)
+  const hasDirectAgentInstructions =
+    source === 'cli' &&
+    [
+      candidate.transformedContent,
+      ...(Array.isArray(candidate.messages)
+        ? candidate.messages.map((message: any) => message?.transformedContent)
+        : []),
+      ...(Array.isArray(candidate.history)
+        ? candidate.history.map((message: any) => message?.transformedContent)
+        : []),
+      ...(Array.isArray(candidate.turns)
+        ? candidate.turns.map((turn: any) => turn?.transformedContent)
+        : [])
+    ].some(
+      value => typeof value === 'string' && value.includes('<agent_instructions>')
+    )
+  const parentSessionId = firstString(
+    candidate.parentSessionId,
+    candidate.parentId,
+    candidate.parent_id,
+    candidate.sessionParentId,
+    candidate.session_parent_id
+  )
 
   const session: SessionSummary = {
     id: sessionId,
@@ -478,6 +501,8 @@ const normalizeSession = (
         candidate.metadata?.agentName
       )
     ),
+    isSubagentSession: Boolean(parentSessionId) || hasDirectAgentInstructions,
+    parentSessionId,
     model: firstString(
       candidate.model,
       candidate.modelName,
@@ -514,6 +539,7 @@ const parseJsonLines = (raw: string): unknown[] => {
 interface SessionEvent {
   type?: string
   timestamp?: string
+  parentId?: string | null
   data?: Record<string, unknown>
 }
 
@@ -597,6 +623,15 @@ const extractAgentFromTransformedInstructions = (value: unknown): string | null 
 
   return normalizeAgent(kebabCaseAgent || heading)
 }
+
+const hasEventLogDirectAgentInstructions = (lines: SessionEvent[]): boolean =>
+  lines.some(
+    line =>
+      line.type === 'user.message' &&
+      firstString(line.data?.['transformedContent'])?.includes(
+        '<agent_instructions>'
+      ) === true
+  )
 
 const extractEventLogAgent = (
   lines: SessionEvent[],
@@ -1435,6 +1470,13 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
     .map(line => firstString(line.data?.['model']))
     .find((value): value is string => Boolean(value))
   const detectedAgent = extractEventLogAgent(lines, sessionStart)
+  const parentSessionId = firstString(
+    sessionStart?.parentId,
+    sessionStart?.data?.['parentSessionId'],
+    sessionStart?.data?.['parentId']
+  )
+  const isDirectAgentSession =
+    detectedSource === 'cli' && hasEventLogDirectAgentInstructions(lines)
 
   const titleSeed =
     messages.find(message => message.role === 'user')?.content ??
@@ -1462,6 +1504,8 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
       ? normalizedPreferredTitle.slice(0, 120)
       : titleSeed.slice(0, 120),
     agent: detectedAgent,
+    isSubagentSession: Boolean(parentSessionId) || isDirectAgentSession,
+    parentSessionId,
     modes: detectedModes.length > 0 ? detectedModes : undefined,
     latestMode: detectedModes.at(-1) ?? null,
     model: firstString(

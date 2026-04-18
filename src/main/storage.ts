@@ -50,6 +50,13 @@ const emptyStore = (): PersistedStore => ({
 const ARCHIVE_PRUNE_MONTHS = 4
 
 const normalize = (value: string): string => value.toLowerCase()
+const normalizeOptionalText = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
 const normalizeExecutionMode = (
   value: unknown
 ): SessionExecutionMode | null => {
@@ -90,11 +97,14 @@ const normalizeSessionSummary = (session: SessionSummary): SessionSummary => {
   const userArchivedAt = userArchived
     ? ensureIso(session.userArchivedAt, updatedAt)
     : undefined
+  const parentSessionId = normalizeOptionalText(session.parentSessionId)
 
   return {
     ...session,
     createdAt,
     updatedAt,
+    isSubagentSession: Boolean(session.isSubagentSession),
+    parentSessionId,
     modes,
     latestMode,
     firstSeenAt,

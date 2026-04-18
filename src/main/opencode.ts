@@ -17,6 +17,7 @@ const EPOCH_SECONDS_THRESHOLD = 10_000_000_000
 
 interface OpenCodeSessionRow {
   id: string
+  parent_id: string | null
   title: string
   directory: string
   time_created: number | string
@@ -188,7 +189,7 @@ export const loadOpenCodeSessions = async (
   try {
     const sessionRows = database
       .prepare(
-        `SELECT id, title, directory, time_created, time_updated
+        `SELECT id, parent_id, title, directory, time_created, time_updated
          FROM session
          WHERE COALESCE(time_archived, 0) = 0
          ORDER BY time_updated DESC`
@@ -278,11 +279,16 @@ export const loadOpenCodeSessions = async (
       const titleSeed =
         messages.find(message => message.role === 'user')?.content ??
         messages[0].content
+      const parentSessionId = sessionRow.parent_id
+        ? `opencode:${sessionRow.parent_id}`
+        : undefined
       const summary: SessionSummary = {
         id: scopedSessionId,
         source: 'opencode',
         repoPath: sessionRow.directory,
         title: firstString(sessionRow.title)?.trim() || titleSeed.slice(0, 120),
+        isSubagentSession: Boolean(parentSessionId),
+        parentSessionId,
         model: lastModel,
         createdAt: toIso(sessionRow.time_created),
         updatedAt: toIso(sessionRow.time_updated),
