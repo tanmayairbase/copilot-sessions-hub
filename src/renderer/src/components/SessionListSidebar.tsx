@@ -145,7 +145,8 @@ const VirtualizedSessionRows = ({
   useEffect(() => {
     setRowSizes(previous => {
       const next = sessions.map(
-        (_, index) => previous[index] ?? getEstimatedRowSize(index, sessions.length)
+        (_, index) =>
+          previous[index] ?? getEstimatedRowSize(index, sessions.length)
       )
       if (
         next.length === previous.length &&
@@ -206,7 +207,8 @@ const VirtualizedSessionRows = ({
     let total = 0
     for (let index = 0; index < sessions.length; index += 1) {
       starts[index] = total
-      const size = rowSizes[index] ?? getEstimatedRowSize(index, sessions.length)
+      const size =
+        rowSizes[index] ?? getEstimatedRowSize(index, sessions.length)
       sizes[index] = size
       total += size
     }
@@ -618,7 +620,7 @@ export const SessionListSidebar = ({
               </select>
             </label>
             <label className="filter-group">
-              <span className="filter-label">Sub-agents</span>
+              <span className="filter-label">Sub-agent sessions</span>
               <select
                 className="filter-select"
                 value={subagentFilter}
@@ -629,8 +631,8 @@ export const SessionListSidebar = ({
                 }
                 aria-label="Sub-agents filter"
               >
-                <option value="hide">Hide sub-agent sessions</option>
-                <option value="show">Show sub-agent sessions</option>
+                <option value="hide">Hide</option>
+                <option value="show">Show</option>
               </select>
             </label>
           </div>

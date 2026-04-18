@@ -14,6 +14,8 @@ const OPENCODE_DB_PATH = join(
   'opencode.db'
 )
 const EPOCH_SECONDS_THRESHOLD = 10_000_000_000
+const METADATA_GENERATOR_PROMPT =
+  'Generate metadata for a coding agent based on the user prompt.'
 
 interface OpenCodeSessionRow {
   id: string
@@ -101,6 +103,17 @@ const parseJsonRecord = (raw: unknown): Record<string, unknown> => {
   return {}
 }
 
+export const normalizeOpenCodeSessionTitle = (value: unknown): string | null => {
+  const direct = firstString(value)?.trim()
+  if (!direct) {
+    return null
+  }
+
+  const parsed = parseJsonRecord(direct)
+  const jsonTitle = firstString(parsed.title)?.trim()
+  return jsonTitle || direct
+}
+
 const inferFormat = (value: string): SessionMessage['format'] => {
   if (value.includes('\u001b[')) {
     return 'ansi'
@@ -160,6 +173,29 @@ const collectMessageContent = (
   }
 
   return firstString(messageData.summary)?.trim() ?? null
+}
+
+export const isOpenCodeInternalMetadataSession = (
+  messageRows: OpenCodeMessageRow[],
+  partsByMessage: ReadonlyMap<string, OpenCodePartRow[]>
+): boolean => {
+  const firstMessage = messageRows[0]
+  if (!firstMessage) {
+    return false
+  }
+
+  const firstMessageData = parseJsonRecord(firstMessage.data)
+  if (normalizeRole(firstMessageData.role) !== 'user') {
+    return false
+  }
+
+  return (partsByMessage.get(firstMessage.id) ?? []).some(part => {
+    const partData = parseJsonRecord(part.data)
+    return (
+      firstString(partData.type)?.toLowerCase() === 'text' &&
+      firstString(partData.text)?.includes(METADATA_GENERATOR_PROMPT) === true
+    )
+  })
 }
 
 export const loadOpenCodeSessions = async (
@@ -282,12 +318,18 @@ export const loadOpenCodeSessions = async (
       const parentSessionId = sessionRow.parent_id
         ? `opencode:${sessionRow.parent_id}`
         : undefined
+      const isInternalMetadataSession = isOpenCodeInternalMetadataSession(
+        messageRows,
+        partsByMessage
+      )
       const summary: SessionSummary = {
         id: scopedSessionId,
         source: 'opencode',
         repoPath: sessionRow.directory,
-        title: firstString(sessionRow.title)?.trim() || titleSeed.slice(0, 120),
-        isSubagentSession: Boolean(parentSessionId),
+        title:
+          normalizeOpenCodeSessionTitle(sessionRow.title) ||
+          titleSeed.slice(0, 120),
+        isSubagentSession: Boolean(parentSessionId) || isInternalMetadataSession,
         parentSessionId,
         model: lastModel,
         createdAt: toIso(sessionRow.time_created),
