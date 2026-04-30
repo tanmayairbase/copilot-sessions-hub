@@ -661,4 +661,274 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].messages[2].content).toContain('What is the fix?')
     expect(parsed[0].messages[3].content).toContain('flushSync')
   })
+
+  it('extracts token usage from the last session.shutdown event', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-with-shutdown',
+          copilotVersion: '1.0.31',
+          startTime: '2026-04-17T03:41:51.081Z',
+          context: { cwd: '/tmp/repo-shutdown' }
+        },
+        timestamp: '2026-04-17T03:41:51.090Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: { content: 'Hello' },
+        timestamp: '2026-04-17T03:42:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Hi.' },
+        timestamp: '2026-04-17T03:42:05.000Z'
+      }),
+      JSON.stringify({
+        type: 'session.shutdown',
+        data: {
+          shutdownType: 'routine',
+          modelMetrics: {
+            'gpt-5.4': {
+              requests: { count: 8, cost: 1 },
+              usage: {
+                inputTokens: 249568,
+                outputTokens: 4904,
+                cacheReadTokens: 211328,
+                cacheWriteTokens: 0,
+                reasoningTokens: 3167
+              }
+            }
+          }
+        },
+        timestamp: '2026-04-17T14:54:27.439Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-with-shutdown/events.jsonl',
+      repoRoot: '/tmp/repo-shutdown',
+      source: 'cli'
+    })
+
+    expect(parsed).toHaveLength(1)
+    const usage = parsed[0].session.tokenUsage
+    expect(usage).toBeDefined()
+    expect(usage?.source).toBe('cli-shutdown')
+    expect(usage?.byModel).toEqual([
+      {
+        modelId: 'gpt-5.4',
+        inputTokens: 249568,
+        cachedInputTokens: 211328,
+        cacheWriteTokens: 0,
+        outputTokens: 4904,
+        reasoningTokens: 3167,
+        requestCount: 8
+      }
+    ])
+    expect(usage?.totals).toEqual({
+      inputTokens: 249568,
+      cachedInputTokens: 211328,
+      cacheWriteTokens: 0,
+      outputTokens: 4904,
+      reasoningTokens: 3167
+    })
+  })
+
+  it('marks tokenUsage as unavailable when no session.shutdown is recorded', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-no-shutdown',
+          copilotVersion: '1.0.31',
+          startTime: '2026-04-17T03:41:51.081Z',
+          context: { cwd: '/tmp/repo-no-shutdown' }
+        },
+        timestamp: '2026-04-17T03:41:51.090Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: { content: 'In progress' },
+        timestamp: '2026-04-17T03:42:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'OK' },
+        timestamp: '2026-04-17T03:42:05.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-no-shutdown/events.jsonl',
+      repoRoot: '/tmp/repo-no-shutdown',
+      source: 'cli'
+    })
+
+    expect(parsed[0].session.tokenUsage).toEqual({
+      source: 'unavailable',
+      byModel: [],
+      totals: {
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheWriteTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0
+      }
+    })
+  })
+
+  it('sums all session.shutdown events when multiple are present (resumed sessions)', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-resumed',
+          copilotVersion: '1.0.31',
+          startTime: '2026-04-17T03:41:51.081Z',
+          context: { cwd: '/tmp/repo-resumed' }
+        },
+        timestamp: '2026-04-17T03:41:51.090Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: { content: 'Hi' },
+        timestamp: '2026-04-17T03:42:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Hi.' },
+        timestamp: '2026-04-17T03:42:05.000Z'
+      }),
+      JSON.stringify({
+        type: 'session.shutdown',
+        data: {
+          modelMetrics: {
+            'gpt-5.4': {
+              requests: { count: 1, cost: 0 },
+              usage: {
+                inputTokens: 100,
+                outputTokens: 10,
+                cacheReadTokens: 0,
+                cacheWriteTokens: 0,
+                reasoningTokens: 0
+              }
+            }
+          }
+        },
+        timestamp: '2026-04-17T05:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'session.shutdown',
+        data: {
+          modelMetrics: {
+            'gpt-5.4': {
+              requests: { count: 5, cost: 1 },
+              usage: {
+                inputTokens: 5000,
+                outputTokens: 500,
+                cacheReadTokens: 1000,
+                cacheWriteTokens: 0,
+                reasoningTokens: 100
+              }
+            }
+          }
+        },
+        timestamp: '2026-04-17T08:00:00.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-resumed/events.jsonl',
+      repoRoot: '/tmp/repo-resumed',
+      source: 'cli'
+    })
+
+    expect(parsed[0].session.tokenUsage?.byModel[0]).toMatchObject({
+      modelId: 'gpt-5.4',
+      inputTokens: 5100,
+      outputTokens: 510,
+      cachedInputTokens: 1000,
+      reasoningTokens: 100,
+      requestCount: 6
+    })
+  })
+
+  it('preserves a per-model array when modelMetrics has multiple models', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-multi-model',
+          copilotVersion: '1.0.31',
+          startTime: '2026-04-17T03:41:51.081Z',
+          context: { cwd: '/tmp/repo-multi' }
+        },
+        timestamp: '2026-04-17T03:41:51.090Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: { content: 'Hi' },
+        timestamp: '2026-04-17T03:42:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Hi.' },
+        timestamp: '2026-04-17T03:42:05.000Z'
+      }),
+      JSON.stringify({
+        type: 'session.shutdown',
+        data: {
+          modelMetrics: {
+            'gpt-5.4': {
+              requests: { count: 4, cost: 1 },
+              usage: {
+                inputTokens: 1000,
+                outputTokens: 200,
+                cacheReadTokens: 500,
+                cacheWriteTokens: 0,
+                reasoningTokens: 50
+              }
+            },
+            'claude-opus-4.7': {
+              requests: { count: 2, cost: 1 },
+              usage: {
+                inputTokens: 800,
+                outputTokens: 100,
+                cacheReadTokens: 0,
+                cacheWriteTokens: 200,
+                reasoningTokens: 30
+              }
+            }
+          }
+        },
+        timestamp: '2026-04-17T08:00:00.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-multi-model/events.jsonl',
+      repoRoot: '/tmp/repo-multi',
+      source: 'cli'
+    })
+
+    const usage = parsed[0].session.tokenUsage
+    expect(usage?.byModel).toHaveLength(2)
+    const byId = Object.fromEntries(
+      (usage?.byModel ?? []).map(m => [m.modelId, m])
+    )
+    expect(byId['gpt-5.4'].inputTokens).toBe(1000)
+    expect(byId['claude-opus-4.7'].cacheWriteTokens).toBe(200)
+    expect(usage?.totals).toEqual({
+      inputTokens: 1800,
+      cachedInputTokens: 500,
+      cacheWriteTokens: 200,
+      outputTokens: 300,
+      reasoningTokens: 80
+    })
+  })
 })

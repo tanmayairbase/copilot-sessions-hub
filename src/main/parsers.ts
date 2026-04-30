@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto'
 import { basename, dirname, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type {
+  ModelTokenUsage,
   SessionMessage,
   SessionExecutionMode,
   SessionSource,
-  SessionSummary
+  SessionSummary,
+  SessionTokenUsage,
+  SessionTokenUsageTotals
 } from '../shared/types'
 
 interface ParseContext {
@@ -1518,10 +1521,106 @@ const parseEventLog = (raw: string, context: ParseContext): ParsedSession[] => {
     messageCount: messages.length,
     filePath: context.filePath,
     openVscodeTarget: context.filePath,
-    openCliCwd: repoPath
+    openCliCwd: repoPath,
+    tokenUsage: extractCliTokenUsage(lines)
   }
 
   return [{ session, messages }]
+}
+
+const ZERO_TOTALS: SessionTokenUsageTotals = {
+  inputTokens: 0,
+  cachedInputTokens: 0,
+  cacheWriteTokens: 0,
+  outputTokens: 0,
+  reasoningTokens: 0
+}
+
+const asNumber = (value: unknown): number => {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+const extractCliTokenUsage = (lines: SessionEvent[]): SessionTokenUsage => {
+  // Sum metrics across all session.shutdown events. Resumed sessions emit a
+  // separate shutdown per run, each containing only that run's tokens, so the
+  // last event alone would lose history.
+  const perModel = new Map<string, ModelTokenUsage>()
+  let foundShutdown = false
+
+  for (const event of lines) {
+    if (event.type !== 'session.shutdown') continue
+    const modelMetricsRaw = event.data?.['modelMetrics']
+    if (
+      !modelMetricsRaw ||
+      typeof modelMetricsRaw !== 'object' ||
+      Array.isArray(modelMetricsRaw)
+    ) {
+      continue
+    }
+    foundShutdown = true
+
+    for (const [modelId, metrics] of Object.entries(
+      modelMetricsRaw as Record<string, unknown>
+    )) {
+      if (!metrics || typeof metrics !== 'object') continue
+      const usage = (metrics as Record<string, unknown>)['usage'] as
+        | Record<string, unknown>
+        | undefined
+      const requests = (metrics as Record<string, unknown>)['requests'] as
+        | Record<string, unknown>
+        | undefined
+      const requestCount = requests ? asNumber(requests['count']) : 0
+
+      const existing = perModel.get(modelId) ?? {
+        modelId,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheWriteTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        requestCount: 0
+      }
+      existing.inputTokens += asNumber(usage?.['inputTokens'])
+      existing.cachedInputTokens += asNumber(usage?.['cacheReadTokens'])
+      existing.cacheWriteTokens += asNumber(usage?.['cacheWriteTokens'])
+      existing.outputTokens += asNumber(usage?.['outputTokens'])
+      existing.reasoningTokens += asNumber(usage?.['reasoningTokens'])
+      existing.requestCount = (existing.requestCount ?? 0) + requestCount
+      perModel.set(modelId, existing)
+    }
+  }
+
+  if (!foundShutdown) {
+    return {
+      source: 'unavailable',
+      byModel: [],
+      totals: { ...ZERO_TOTALS }
+    }
+  }
+
+  const byModel = Array.from(perModel.values()).map(entry => {
+    if (entry.requestCount && entry.requestCount > 0) return entry
+    const next: ModelTokenUsage = { ...entry }
+    delete next.requestCount
+    return next
+  })
+
+  const totals = byModel.reduce<SessionTokenUsageTotals>(
+    (acc, entry) => ({
+      inputTokens: acc.inputTokens + entry.inputTokens,
+      cachedInputTokens: acc.cachedInputTokens + entry.cachedInputTokens,
+      cacheWriteTokens: acc.cacheWriteTokens + entry.cacheWriteTokens,
+      outputTokens: acc.outputTokens + entry.outputTokens,
+      reasoningTokens: acc.reasoningTokens + entry.reasoningTokens
+    }),
+    { ...ZERO_TOTALS }
+  )
+
+  return {
+    source: 'cli-shutdown',
+    byModel,
+    totals
+  }
 }
 
 export const parseSessionArtifacts = (

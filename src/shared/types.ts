@@ -5,6 +5,35 @@ export type DiscoveryMode = 'autodiscovery' | 'explicit' | 'both'
 export type SyncMode = 'manual' | 'manual-plus-background'
 export type AppearancePreference = 'system' | 'light' | 'dark'
 
+export interface ModelTokenUsage {
+  modelId: string
+  inputTokens: number
+  cachedInputTokens: number
+  cacheWriteTokens: number
+  outputTokens: number
+  reasoningTokens: number
+  requestCount?: number
+}
+
+export type TokenUsageSource =
+  | 'cli-shutdown'
+  | 'opencode-messages'
+  | 'unavailable'
+
+export interface SessionTokenUsageTotals {
+  inputTokens: number
+  cachedInputTokens: number
+  cacheWriteTokens: number
+  outputTokens: number
+  reasoningTokens: number
+}
+
+export interface SessionTokenUsage {
+  source: TokenUsageSource
+  byModel: ModelTokenUsage[]
+  totals: SessionTokenUsageTotals
+}
+
 export interface AppConfig {
   repoRoots: string[]
   discoveryMode: DiscoveryMode
@@ -36,6 +65,7 @@ export interface SessionSummary {
   missingFromLastSync?: boolean
   userArchived?: boolean
   userArchivedAt?: string
+  tokenUsage?: SessionTokenUsage
 }
 
 export interface SessionMessage {

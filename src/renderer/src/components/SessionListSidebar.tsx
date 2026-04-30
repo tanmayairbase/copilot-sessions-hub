@@ -11,6 +11,7 @@ import {
   toSearchPreview,
   toTildePath
 } from '@shared/format'
+import { SessionCostChip } from './SessionCostChip'
 
 type DateFilterValue = DateFilterPreset | ''
 type OriginFilterValue = SessionSource
@@ -475,7 +476,10 @@ export const SessionListSidebar = ({
           <span>{formatSessionOrigin(session.source)}</span>
           <span>{formatTimestampIST(session.updatedAt)}</span>
         </div>
-        <div className="session-path">{toTildePath(session.repoPath)}</div>
+        <div className="session-path">
+          <span className="session-path-text">{toTildePath(session.repoPath)}</span>
+          <SessionCostChip usage={session.tokenUsage} />
+        </div>
       </button>
     )
   }

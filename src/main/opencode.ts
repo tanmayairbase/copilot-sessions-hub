@@ -1,7 +1,13 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { SessionMessage, SessionSummary } from '../shared/types'
+import type {
+  ModelTokenUsage,
+  SessionMessage,
+  SessionSummary,
+  SessionTokenUsage,
+  SessionTokenUsageTotals
+} from '../shared/types'
 import { logError, logInfo, logWarn } from './logger'
 import { isWithinRepoRoots } from './repo-roots'
 import type { SessionInsert } from './storage'
@@ -198,6 +204,75 @@ export const isOpenCodeInternalMetadataSession = (
   })
 }
 
+const ZERO_OPENCODE_TOTALS: SessionTokenUsageTotals = {
+  inputTokens: 0,
+  cachedInputTokens: 0,
+  cacheWriteTokens: 0,
+  outputTokens: 0,
+  reasoningTokens: 0
+}
+
+const asNumber = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0
+
+export const aggregateOpenCodeTokenUsage = (
+  messageRows: OpenCodeMessageRow[]
+): SessionTokenUsage => {
+  const perModel = new Map<string, ModelTokenUsage>()
+
+  for (const row of messageRows) {
+    const data = parseJsonRecord(row.data)
+    if (normalizeRole(data.role) !== 'assistant') continue
+    const tokens = data.tokens
+    if (!tokens || typeof tokens !== 'object' || Array.isArray(tokens)) continue
+    const modelId = firstString(data.modelID, data.model)
+    if (!modelId) continue
+
+    const t = tokens as Record<string, unknown>
+    const cache =
+      t.cache && typeof t.cache === 'object' && !Array.isArray(t.cache)
+        ? (t.cache as Record<string, unknown>)
+        : {}
+
+    const existing = perModel.get(modelId) ?? {
+      modelId,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0
+    }
+    existing.inputTokens += asNumber(t.input)
+    existing.outputTokens += asNumber(t.output)
+    existing.reasoningTokens += asNumber(t.reasoning)
+    existing.cachedInputTokens += asNumber(cache.read)
+    existing.cacheWriteTokens += asNumber(cache.write)
+    perModel.set(modelId, existing)
+  }
+
+  if (perModel.size === 0) {
+    return {
+      source: 'unavailable',
+      byModel: [],
+      totals: { ...ZERO_OPENCODE_TOTALS }
+    }
+  }
+
+  const byModel = Array.from(perModel.values())
+  const totals = byModel.reduce<SessionTokenUsageTotals>(
+    (acc, entry) => ({
+      inputTokens: acc.inputTokens + entry.inputTokens,
+      cachedInputTokens: acc.cachedInputTokens + entry.cachedInputTokens,
+      cacheWriteTokens: acc.cacheWriteTokens + entry.cacheWriteTokens,
+      outputTokens: acc.outputTokens + entry.outputTokens,
+      reasoningTokens: acc.reasoningTokens + entry.reasoningTokens
+    }),
+    { ...ZERO_OPENCODE_TOTALS }
+  )
+
+  return { source: 'opencode-messages', byModel, totals }
+}
+
 export const loadOpenCodeSessions = async (
   repoRoots: string[]
 ): Promise<SessionInsert[]> => {
@@ -337,7 +412,8 @@ export const loadOpenCodeSessions = async (
         messageCount: messages.length,
         filePath: `${OPENCODE_DB_PATH}#${sessionRow.id}`,
         openVscodeTarget: sessionRow.directory,
-        openCliCwd: sessionRow.directory
+        openCliCwd: sessionRow.directory,
+        tokenUsage: aggregateOpenCodeTokenUsage(messageRows)
       }
 
       inserts.push({ session: summary, messages })

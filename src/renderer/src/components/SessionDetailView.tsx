@@ -12,7 +12,8 @@ import { normalizeExternalUrl } from '@shared/links'
 import type {
   SessionDetail,
   SessionExecutionMode,
-  SessionMessage
+  SessionMessage,
+  SessionTokenUsage
 } from '@shared/types'
 import {
   formatMinuteKeyIST,
@@ -20,6 +21,7 @@ import {
   formatTimestampIST,
   normalizeModelLabel
 } from '@shared/format'
+import { TokenUsageBarWithTooltip } from './TokenUsageBarWithTooltip'
 
 type TranscriptTheme = 'light' | 'dark'
 
@@ -432,6 +434,23 @@ export const SessionDetailView = ({
             <path d="M5 3h10v3H8v9H5z" />
           </svg>
         </button>
+        <TokenUsageBarWithTooltip
+          usage={
+            detail.tokenUsage ??
+            ({
+              source: 'unavailable',
+              byModel: [],
+              totals: {
+                inputTokens: 0,
+                cachedInputTokens: 0,
+                cacheWriteTokens: 0,
+                outputTokens: 0,
+                reasoningTokens: 0
+              }
+            } satisfies SessionTokenUsage)
+          }
+          modelLabel={normalizeModelLabel(detail.model)}
+        />
       </header>
 
       <div className="detail-thread-wrap">

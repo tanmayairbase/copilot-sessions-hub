@@ -70,6 +70,11 @@
   --shadow-overlay: 0 10px 30px rgba(0, 0, 0, 0.35);
   --shadow-floating: 0 14px 28px rgba(1, 4, 9, 0.36);
   --overlay-backdrop: rgba(0, 0, 0, 0.55);
+  --token-bar-input: #38bdf8;
+  --token-bar-cached: #fb923c;
+  --token-bar-cache-write: #a78bfa;
+  --token-bar-output: #34d399;
+  --token-bar-unavailable: #475569;
 }
 
 :root[data-theme='light'] {
@@ -137,6 +142,11 @@
   --shadow-overlay: 0 12px 30px rgba(15, 23, 42, 0.12);
   --shadow-floating: 0 14px 28px rgba(15, 23, 42, 0.16);
   --overlay-backdrop: rgba(15, 23, 42, 0.2);
+  --token-bar-input: #0284c7;
+  --token-bar-cached: #ea580c;
+  --token-bar-cache-write: #7c3aed;
+  --token-bar-output: #059669;
+  --token-bar-unavailable: #cbd5e1;
 }
 
 * {
@@ -495,6 +505,20 @@ button:hover {
   line-height: 1.2;
 }
 
+.session-cost-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-default);
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
 .message-mode-pill {
   border-radius: 999px;
   padding: 1px 6px;
@@ -520,6 +544,15 @@ button:hover {
 .session-path {
   color: var(--text-accent-soft);
   font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.session-path-text {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -699,13 +732,153 @@ button:hover {
 }
 
 .detail-header {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: start;
   gap: 16px;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 16px 18px;
+  padding: 16px 18px 22px 18px;
   min-width: 0;
+}
+
+.token-usage-bar-host {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+}
+
+.token-usage-bar {
+  display: flex;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  background: var(--border-subtle);
+}
+
+.token-usage-bar__segment {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  transition: none;
+}
+
+.token-usage-bar--unavailable {
+  background: var(--token-bar-unavailable);
+  opacity: 0.5;
+}
+
+.token-usage-bar--unavailable .token-usage-bar__segment--unavailable {
+  width: 100%;
+  background: transparent;
+}
+
+.token-usage-bar-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 12px;
+  z-index: 30;
+  min-width: 240px;
+  max-width: 360px;
+  padding: 12px 14px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: var(--shadow-floating);
+  color: var(--text-primary);
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease 80ms;
+}
+
+.token-usage-bar-host:hover .token-usage-bar-tooltip,
+.token-usage-bar-host:focus-within .token-usage-bar-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.token-tooltip__model + .token-tooltip__model {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.token-tooltip__model-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.token-tooltip__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  column-gap: 8px;
+  row-gap: 4px;
+  align-items: center;
+}
+
+.token-tooltip__line {
+  display: contents;
+}
+
+.token-tooltip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.token-tooltip__label {
+  color: var(--text-secondary);
+}
+
+.token-tooltip__value {
+  color: var(--text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-tooltip__cost-row {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  row-gap: 4px;
+}
+
+.token-tooltip__cost-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.token-tooltip__cost-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.token-tooltip__footnote {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.token-tooltip__unavailable {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .detail-title-wrap {
