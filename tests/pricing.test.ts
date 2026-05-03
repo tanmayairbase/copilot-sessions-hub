@@ -101,10 +101,10 @@ describe('computeCost', () => {
       outputTokens: 4_904,
       reasoningTokens: 3_167
     })
-    // expected = (249568*2.5 + 211328*0.25 + 4904*15) / 1_000_000
-    //         = (623_920 + 52_832 + 73_560) / 1_000_000
-    //         = 0.750312
-    expect(cost).toBeCloseTo(0.750312, 6)
+    // expected = ((249568-211328)*2.5 + 211328*0.25 + 4904*15) / 1_000_000
+    //         = (95_600 + 52_832 + 73_560) / 1_000_000
+    //         = 0.221992
+    expect(cost).toBeCloseTo(0.221992, 6)
   })
 
   it('adds reasoning to output for Anthropic and bills cache writes', () => {
@@ -117,10 +117,22 @@ describe('computeCost', () => {
       outputTokens: 4_000,
       reasoningTokens: 1_000
     })
-    // expected = (100000*5 + 50000*0.5 + 20000*6.25 + (4000+1000)*25) / 1e6
-    //         = (500_000 + 25_000 + 125_000 + 125_000) / 1e6
-    //         = 0.775
-    expect(cost).toBeCloseTo(0.775, 6)
+    // expected = ((100000-50000)*5 + 50000*0.5 + 20000*6.25 + (4000+1000)*25) / 1e6
+    //         = (250_000 + 25_000 + 125_000 + 125_000) / 1e6
+    //         = 0.525
+    expect(cost).toBeCloseTo(0.525, 6)
+  })
+
+  it('keeps input fully billable when cached reads exceed input', () => {
+    const cost = computeCost({
+      modelId: 'gpt-5.4',
+      inputTokens: 1_000,
+      cachedInputTokens: 1_200,
+      cacheWriteTokens: 0,
+      outputTokens: 100,
+      reasoningTokens: 0
+    })
+    expect(cost).toBeCloseTo(0.0043, 6)
   })
 
   it('returns null for an unknown model (no rate)', () => {

@@ -66,15 +66,26 @@ export interface ModelTokenCounts {
   requestCount?: number
 }
 
+const billableInputTokens = ({
+  inputTokens,
+  cachedInputTokens
+}: Pick<ModelTokenCounts, 'inputTokens' | 'cachedInputTokens'>): number => {
+  if (cachedInputTokens > 0 && cachedInputTokens <= inputTokens) {
+    return inputTokens - cachedInputTokens
+  }
+  return inputTokens
+}
+
 export const computeCost = (counts: ModelTokenCounts): number | null => {
   const rate = priceFor(counts.modelId)
   if (!rate) return null
+  const billableInput = billableInputTokens(counts)
   const billableOutput =
     rate.provider === 'anthropic'
       ? counts.outputTokens + counts.reasoningTokens
       : counts.outputTokens
   return (
-    (counts.inputTokens * rate.input +
+    (billableInput * rate.input +
       counts.cachedInputTokens * rate.cachedInput +
       counts.cacheWriteTokens * rate.cacheWrite +
       billableOutput * rate.output) /
