@@ -468,21 +468,7 @@ const normalizeSession = (
     sourceFromHint(candidate.producer) ??
     inferSource(context.filePath, context.source)
   const hasDirectAgentInstructions =
-    source === 'cli' &&
-    [
-      candidate.transformedContent,
-      ...(Array.isArray(candidate.messages)
-        ? candidate.messages.map((message: any) => message?.transformedContent)
-        : []),
-      ...(Array.isArray(candidate.history)
-        ? candidate.history.map((message: any) => message?.transformedContent)
-        : []),
-      ...(Array.isArray(candidate.turns)
-        ? candidate.turns.map((turn: any) => turn?.transformedContent)
-        : [])
-    ].some(
-      value => typeof value === 'string' && value.includes('<agent_instructions>')
-    )
+    source === 'cli' && hasLeadingStructuredAgentInstructions(candidate)
   const parentSessionId = firstString(
     candidate.parentSessionId,
     candidate.parentId,
@@ -605,6 +591,9 @@ const extractTaskAgentFromToolRequests = (value: unknown): string | null => {
   return null
 }
 
+const hasAgentInstructions = (value: unknown): boolean =>
+  firstString(value)?.includes('<agent_instructions>') === true
+
 const extractAgentFromTransformedInstructions = (value: unknown): string | null => {
   const transformed = firstString(value)
   if (!transformed || !transformed.includes('<agent_instructions>')) {
@@ -627,14 +616,94 @@ const extractAgentFromTransformedInstructions = (value: unknown): string | null 
   return normalizeAgent(kebabCaseAgent || heading)
 }
 
-const hasEventLogDirectAgentInstructions = (lines: SessionEvent[]): boolean =>
-  lines.some(
-    line =>
-      line.type === 'user.message' &&
-      firstString(line.data?.['transformedContent'])?.includes(
-        '<agent_instructions>'
-      ) === true
+const hasStructuredEntryAgentInstructions = (
+  entries: unknown[],
+  getTransformedContent: (entry: unknown) => unknown,
+  inferRole: (entry: unknown, index: number) => 'user' | 'assistant' | null
+): boolean => {
+  for (let index = 0; index < entries.length; index += 1) {
+    const role = inferRole(entries[index], index)
+    if (role === 'assistant') {
+      return false
+    }
+    if (role === 'user') {
+      return hasAgentInstructions(getTransformedContent(entries[index]))
+    }
+  }
+  return false
+}
+
+const inferStructuredMessageRole = (
+  entry: unknown,
+  index: number
+): 'user' | 'assistant' | null => {
+  const record = asRecord(entry)
+  const explicitRole = firstString(
+    record?.['role'],
+    record?.['author'],
+    record?.['sender']
   )
+    ?.trim()
+    .toLowerCase()
+  if (explicitRole === 'user') {
+    return 'user'
+  }
+  if (explicitRole === 'assistant') {
+    return 'assistant'
+  }
+  if (explicitRole) {
+    return null
+  }
+  return index % 2 === 0 ? 'user' : 'assistant'
+}
+
+const hasLeadingStructuredAgentInstructions = (candidate: any): boolean => {
+  if (hasAgentInstructions(candidate.transformedContent)) {
+    return true
+  }
+  if (Array.isArray(candidate.messages)) {
+    return hasStructuredEntryAgentInstructions(
+      candidate.messages,
+      message => asRecord(message)?.['transformedContent'],
+      inferStructuredMessageRole
+    )
+  }
+  if (Array.isArray(candidate.history)) {
+    return hasStructuredEntryAgentInstructions(
+      candidate.history,
+      message => asRecord(message)?.['transformedContent'],
+      inferStructuredMessageRole
+    )
+  }
+  if (Array.isArray(candidate.turns)) {
+    return hasStructuredEntryAgentInstructions(
+      candidate.turns,
+      turn => asRecord(turn)?.['transformedContent'],
+      (_turn, index) => (index === 0 ? 'user' : 'assistant')
+    )
+  }
+  if (Array.isArray(candidate)) {
+    return hasStructuredEntryAgentInstructions(
+      candidate,
+      message => asRecord(message)?.['transformedContent'],
+      inferStructuredMessageRole
+    )
+  }
+  return false
+}
+
+const hasEventLogDirectAgentInstructions = (lines: SessionEvent[]): boolean => {
+  for (const line of lines) {
+    if (line.type === 'assistant.message') {
+      return false
+    }
+    if (line.type !== 'user.message') {
+      continue
+    }
+    return hasAgentInstructions(line.data?.['transformedContent'])
+  }
+  return false
+}
 
 const extractEventLogAgent = (
   lines: SessionEvent[],

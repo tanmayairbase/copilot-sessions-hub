@@ -219,6 +219,58 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].messages[0]?.content).toBe('let us continue')
   })
 
+  it('does not mark later custom-agent turns in a CLI session as a sub-agent session', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'session.start',
+        data: {
+          sessionId: 'session-events-later-custom-agent',
+          producer: 'copilot-agent',
+          copilotVersion: '1.0.39',
+          startTime: '2026-03-10T10:00:00.000Z',
+          context: { cwd: '/tmp/repo-events' }
+        },
+        timestamp: '2026-03-10T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: { content: 'fix the flaky test' },
+        timestamp: '2026-03-10T10:00:01.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'I will investigate it.' },
+        timestamp: '2026-03-10T10:00:02.000Z'
+      }),
+      JSON.stringify({
+        type: 'user.message',
+        data: {
+          content: 'review PR #123',
+          transformedContent:
+            '<agent_instructions>\n# Frontend Code Review Agent\n\nReview the PR.\n</agent_instructions>'
+        },
+        timestamp: '2026-03-10T10:10:00.000Z'
+      }),
+      JSON.stringify({
+        type: 'assistant.message',
+        data: { content: 'Reviewing now.' },
+        timestamp: '2026-03-10T10:10:01.000Z'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.copilot/session-state/session-events-later-custom-agent/events.jsonl',
+      repoRoot: '/tmp/repo-events',
+      source: 'cli'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].session.source).toBe('cli')
+    expect(parsed[0].session.agent).toBe('frontend-code-review-agent')
+    expect(parsed[0].session.isSubagentSession).toBe(false)
+  })
+
   it('marks CLI event sessions with session-level parent linkage as sub-agent sessions', () => {
     const raw = [
       JSON.stringify({
