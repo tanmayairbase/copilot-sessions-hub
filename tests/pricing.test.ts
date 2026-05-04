@@ -1,5 +1,48 @@
 import { describe, expect, it } from 'vitest'
-import { computeCost, costTier, priceFor, providerOf } from '../src/shared/pricing'
+import type { ModelTokenUsage, SessionTokenUsage } from '../src/shared/types'
+import {
+  computeCost,
+  costTier,
+  priceFor,
+  providerOf,
+  sessionCostCategory,
+  sessionEstimatedCost
+} from '../src/shared/pricing'
+
+const modelUsage = (
+  overrides: Partial<ModelTokenUsage> & { modelId: string }
+): ModelTokenUsage => ({
+  inputTokens: 0,
+  cachedInputTokens: 0,
+  cacheWriteTokens: 0,
+  outputTokens: 0,
+  reasoningTokens: 0,
+  ...overrides
+})
+
+const usage = (
+  byModel: ModelTokenUsage[],
+  source: SessionTokenUsage['source'] = 'cli-shutdown'
+): SessionTokenUsage => ({
+  source,
+  byModel,
+  totals: byModel.reduce(
+    (totals, model) => ({
+      inputTokens: totals.inputTokens + model.inputTokens,
+      cachedInputTokens: totals.cachedInputTokens + model.cachedInputTokens,
+      cacheWriteTokens: totals.cacheWriteTokens + model.cacheWriteTokens,
+      outputTokens: totals.outputTokens + model.outputTokens,
+      reasoningTokens: totals.reasoningTokens + model.reasoningTokens
+    }),
+    {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0
+    }
+  )
+})
 
 describe('priceFor', () => {
   it('returns the OpenAI rate for gpt-5.4', () => {
@@ -55,7 +98,9 @@ describe('priceFor', () => {
   )
 
   it('strips -preview suffix when matching gemini ids', () => {
-    expect(priceFor('gemini-3.1-pro-preview')).toEqual(priceFor('gemini-3.1-pro'))
+    expect(priceFor('gemini-3.1-pro-preview')).toEqual(
+      priceFor('gemini-3.1-pro')
+    )
   })
 
   it('is case-insensitive', () => {
@@ -178,5 +223,94 @@ describe('costTier', () => {
 
   it('returns null when cost is null (unavailable)', () => {
     expect(costTier(null)).toBeNull()
+  })
+})
+
+describe('sessionEstimatedCost', () => {
+  it('totals only the priced models in a session', () => {
+    expect(
+      sessionEstimatedCost(
+        usage([
+          modelUsage({
+            modelId: 'gpt-5.4',
+            inputTokens: 200_000,
+            outputTokens: 200_000
+          }),
+          modelUsage({
+            modelId: 'completely-unknown-model',
+            inputTokens: 999_999,
+            outputTokens: 999_999
+          })
+        ])
+      )
+    ).toBeCloseTo(3.5, 6)
+  })
+
+  it('returns null when no total cost can be computed', () => {
+    expect(
+      sessionEstimatedCost(
+        usage([
+          modelUsage({
+            modelId: 'completely-unknown-model',
+            inputTokens: 1000,
+            outputTokens: 1000
+          })
+        ])
+      )
+    ).toBeNull()
+    expect(sessionEstimatedCost(usage([], 'unavailable'))).toBeNull()
+    expect(sessionEstimatedCost(undefined)).toBeNull()
+  })
+})
+
+describe('sessionCostCategory', () => {
+  it('maps a computed session total into the shared cost tiers', () => {
+    expect(
+      sessionCostCategory(
+        usage([
+          modelUsage({
+            modelId: 'gpt-5.4-mini',
+            inputTokens: 100_000,
+            outputTokens: 100_000
+          })
+        ])
+      )
+    ).toBe('$')
+    expect(
+      sessionCostCategory(
+        usage([
+          modelUsage({
+            modelId: 'gpt-5.4',
+            inputTokens: 200_000,
+            outputTokens: 200_000
+          })
+        ])
+      )
+    ).toBe('$$')
+    expect(
+      sessionCostCategory(
+        usage([
+          modelUsage({
+            modelId: 'gpt-5.4',
+            inputTokens: 500_000,
+            outputTokens: 500_000
+          })
+        ])
+      )
+    ).toBe('$$$')
+  })
+
+  it('returns unavailable only when no session total exists', () => {
+    expect(
+      sessionCostCategory(
+        usage([
+          modelUsage({
+            modelId: 'completely-unknown-model',
+            inputTokens: 1000,
+            outputTokens: 1000
+          })
+        ])
+      )
+    ).toBe('unavailable')
   })
 })

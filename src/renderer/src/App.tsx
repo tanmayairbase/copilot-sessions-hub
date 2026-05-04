@@ -23,6 +23,7 @@ import {
   matchesRepositoryFilter,
   normalizeModelLabel
 } from '@shared/format'
+import { sessionCostCategory, type SessionCostCategory } from '@shared/pricing'
 import { SessionDetailView } from './components/SessionDetailView'
 import {
   SessionListSidebar,
@@ -169,6 +170,9 @@ export const App = () => {
   const [toast, setToast] = useState<string | null>(null)
   const [selectedRepos, setSelectedRepos] = useState<string[]>([])
   const [selectedModels, setSelectedModels] = useState<string[]>([])
+  const [selectedEstimatedCosts, setSelectedEstimatedCosts] = useState<
+    SessionCostCategory[]
+  >([])
   const [selectedOrigins, setSelectedOrigins] = useState<SessionSource[]>([])
   const [dateFilter, setDateFilter] = useState<DateFilterValue>('')
   const [archivedFilter, setArchivedFilter] =
@@ -414,6 +418,10 @@ export const App = () => {
     () => ['vscode', 'cli', 'opencode'] as SessionSource[],
     []
   )
+  const estimatedCostOptions = useMemo(
+    () => ['$', '$$', '$$$', 'unavailable'] as SessionCostCategory[],
+    []
+  )
 
   useEffect(() => {
     setSelectedRepos(current =>
@@ -471,6 +479,14 @@ export const App = () => {
         return false
       }
       if (
+        selectedEstimatedCosts.length > 0 &&
+        !selectedEstimatedCosts.includes(
+          sessionCostCategory(session.tokenUsage)
+        )
+      ) {
+        return false
+      }
+      if (
         selectedOrigins.length > 0 &&
         !selectedOrigins.includes(session.source)
       ) {
@@ -486,6 +502,7 @@ export const App = () => {
     })
   }, [
     dateFilter,
+    selectedEstimatedCosts,
     selectedModels,
     selectedOrigins,
     selectedRepos,
@@ -559,6 +576,17 @@ export const App = () => {
     )
   }, [])
 
+  const onToggleEstimatedCost = useCallback(
+    (value: SessionCostCategory): void => {
+      setSelectedEstimatedCosts(current =>
+        current.includes(value)
+          ? current.filter(item => item !== value)
+          : [...current, value]
+      )
+    },
+    []
+  )
+
   const onToggleOrigin = useCallback((source: SessionSource): void => {
     setSelectedOrigins(current =>
       current.includes(source)
@@ -569,6 +597,7 @@ export const App = () => {
   const onClearFilters = useCallback((): void => {
     setSelectedRepos([])
     setSelectedModels([])
+    setSelectedEstimatedCosts([])
     setSelectedOrigins([])
     setDateFilter('')
     setArchivedFilter('hide')
@@ -941,6 +970,7 @@ export const App = () => {
   const hasActiveFilters =
     selectedRepos.length > 0 ||
     selectedModels.length > 0 ||
+    selectedEstimatedCosts.length > 0 ||
     selectedOrigins.length > 0 ||
     Boolean(dateFilter) ||
     archivedFilter !== 'hide' ||
@@ -994,6 +1024,9 @@ export const App = () => {
             modelOptions={modelOptions}
             selectedModels={selectedModels}
             onToggleModel={onToggleModel}
+            estimatedCostOptions={estimatedCostOptions}
+            selectedEstimatedCosts={selectedEstimatedCosts}
+            onToggleEstimatedCost={onToggleEstimatedCost}
             originOptions={originOptions}
             selectedOrigins={selectedOrigins}
             onToggleOrigin={onToggleOrigin}

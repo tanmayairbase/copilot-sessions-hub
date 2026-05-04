@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { computeCost, costTier } from '../../../shared/pricing'
+import { costTier, sessionEstimatedCost } from '../../../shared/pricing'
 import type { SessionTokenUsage } from '../../../shared/types'
 
 export interface SessionCostChipProps {
@@ -14,19 +14,8 @@ const fmtUsd = (n: number): string => {
 export function SessionCostChip({
   usage
 }: SessionCostChipProps): ReactElement | null {
-  if (!usage || usage.source === 'unavailable') return null
-
-  let total = 0
-  let priced = false
-  for (const model of usage.byModel) {
-    const cost = computeCost(model)
-    if (cost !== null) {
-      total += cost
-      priced = true
-    }
-  }
-  if (!priced) return null
-
+  const total = sessionEstimatedCost(usage)
+  if (total === null) return null
   const tier = costTier(total)
   if (!tier) return null
 

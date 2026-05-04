@@ -1,3 +1,5 @@
+import type { SessionTokenUsage } from './types'
+
 export type Provider = 'openai' | 'anthropic' | 'google' | 'xai' | 'github'
 
 export interface ModelRate {
@@ -10,32 +12,164 @@ export interface ModelRate {
 
 const RATES: Record<string, ModelRate> = {
   // OpenAI
-  'gpt-4.1': { provider: 'openai', input: 2, cachedInput: 0.5, cacheWrite: 0, output: 8 },
-  'gpt-5-mini': { provider: 'openai', input: 0.25, cachedInput: 0.025, cacheWrite: 0, output: 2 },
-  'gpt-5.2': { provider: 'openai', input: 1.75, cachedInput: 0.175, cacheWrite: 0, output: 14 },
-  'gpt-5.2-codex': { provider: 'openai', input: 1.75, cachedInput: 0.175, cacheWrite: 0, output: 14 },
-  'gpt-5.3-codex': { provider: 'openai', input: 1.75, cachedInput: 0.175, cacheWrite: 0, output: 14 },
-  'gpt-5.4': { provider: 'openai', input: 2.5, cachedInput: 0.25, cacheWrite: 0, output: 15 },
-  'gpt-5.4-mini': { provider: 'openai', input: 0.75, cachedInput: 0.075, cacheWrite: 0, output: 4.5 },
-  'gpt-5.4-nano': { provider: 'openai', input: 0.2, cachedInput: 0.02, cacheWrite: 0, output: 1.25 },
-  'gpt-5.5': { provider: 'openai', input: 5, cachedInput: 0.5, cacheWrite: 0, output: 30 },
+  'gpt-4.1': {
+    provider: 'openai',
+    input: 2,
+    cachedInput: 0.5,
+    cacheWrite: 0,
+    output: 8
+  },
+  'gpt-5-mini': {
+    provider: 'openai',
+    input: 0.25,
+    cachedInput: 0.025,
+    cacheWrite: 0,
+    output: 2
+  },
+  'gpt-5.2': {
+    provider: 'openai',
+    input: 1.75,
+    cachedInput: 0.175,
+    cacheWrite: 0,
+    output: 14
+  },
+  'gpt-5.2-codex': {
+    provider: 'openai',
+    input: 1.75,
+    cachedInput: 0.175,
+    cacheWrite: 0,
+    output: 14
+  },
+  'gpt-5.3-codex': {
+    provider: 'openai',
+    input: 1.75,
+    cachedInput: 0.175,
+    cacheWrite: 0,
+    output: 14
+  },
+  'gpt-5.4': {
+    provider: 'openai',
+    input: 2.5,
+    cachedInput: 0.25,
+    cacheWrite: 0,
+    output: 15
+  },
+  'gpt-5.4-mini': {
+    provider: 'openai',
+    input: 0.75,
+    cachedInput: 0.075,
+    cacheWrite: 0,
+    output: 4.5
+  },
+  'gpt-5.4-nano': {
+    provider: 'openai',
+    input: 0.2,
+    cachedInput: 0.02,
+    cacheWrite: 0,
+    output: 1.25
+  },
+  'gpt-5.5': {
+    provider: 'openai',
+    input: 5,
+    cachedInput: 0.5,
+    cacheWrite: 0,
+    output: 30
+  },
   // Anthropic
-  'claude-haiku-4.5': { provider: 'anthropic', input: 1, cachedInput: 0.1, cacheWrite: 1.25, output: 5 },
-  'claude-sonnet-4': { provider: 'anthropic', input: 3, cachedInput: 0.3, cacheWrite: 3.75, output: 15 },
-  'claude-sonnet-4.5': { provider: 'anthropic', input: 3, cachedInput: 0.3, cacheWrite: 3.75, output: 15 },
-  'claude-sonnet-4.6': { provider: 'anthropic', input: 3, cachedInput: 0.3, cacheWrite: 3.75, output: 15 },
-  'claude-opus-4.5': { provider: 'anthropic', input: 5, cachedInput: 0.5, cacheWrite: 6.25, output: 25 },
-  'claude-opus-4.6': { provider: 'anthropic', input: 5, cachedInput: 0.5, cacheWrite: 6.25, output: 25 },
-  'claude-opus-4.7': { provider: 'anthropic', input: 5, cachedInput: 0.5, cacheWrite: 6.25, output: 25 },
+  'claude-haiku-4.5': {
+    provider: 'anthropic',
+    input: 1,
+    cachedInput: 0.1,
+    cacheWrite: 1.25,
+    output: 5
+  },
+  'claude-sonnet-4': {
+    provider: 'anthropic',
+    input: 3,
+    cachedInput: 0.3,
+    cacheWrite: 3.75,
+    output: 15
+  },
+  'claude-sonnet-4.5': {
+    provider: 'anthropic',
+    input: 3,
+    cachedInput: 0.3,
+    cacheWrite: 3.75,
+    output: 15
+  },
+  'claude-sonnet-4.6': {
+    provider: 'anthropic',
+    input: 3,
+    cachedInput: 0.3,
+    cacheWrite: 3.75,
+    output: 15
+  },
+  'claude-opus-4.5': {
+    provider: 'anthropic',
+    input: 5,
+    cachedInput: 0.5,
+    cacheWrite: 6.25,
+    output: 25
+  },
+  'claude-opus-4.6': {
+    provider: 'anthropic',
+    input: 5,
+    cachedInput: 0.5,
+    cacheWrite: 6.25,
+    output: 25
+  },
+  'claude-opus-4.7': {
+    provider: 'anthropic',
+    input: 5,
+    cachedInput: 0.5,
+    cacheWrite: 6.25,
+    output: 25
+  },
   // Google
-  'gemini-2.5-pro': { provider: 'google', input: 1.25, cachedInput: 0.125, cacheWrite: 0, output: 10 },
-  'gemini-3-flash': { provider: 'google', input: 0.5, cachedInput: 0.05, cacheWrite: 0, output: 3 },
-  'gemini-3.1-pro': { provider: 'google', input: 2, cachedInput: 0.2, cacheWrite: 0, output: 12 },
+  'gemini-2.5-pro': {
+    provider: 'google',
+    input: 1.25,
+    cachedInput: 0.125,
+    cacheWrite: 0,
+    output: 10
+  },
+  'gemini-3-flash': {
+    provider: 'google',
+    input: 0.5,
+    cachedInput: 0.05,
+    cacheWrite: 0,
+    output: 3
+  },
+  'gemini-3.1-pro': {
+    provider: 'google',
+    input: 2,
+    cachedInput: 0.2,
+    cacheWrite: 0,
+    output: 12
+  },
   // xAI
-  'grok-code-fast-1': { provider: 'xai', input: 0.2, cachedInput: 0.02, cacheWrite: 0, output: 1.5 },
+  'grok-code-fast-1': {
+    provider: 'xai',
+    input: 0.2,
+    cachedInput: 0.02,
+    cacheWrite: 0,
+    output: 1.5
+  },
   // GitHub fine-tuned
-  'raptor-mini': { provider: 'github', input: 0.25, cachedInput: 0.025, cacheWrite: 0, output: 2 },
-  goldeneye: { provider: 'github', input: 1.25, cachedInput: 0.125, cacheWrite: 0, output: 10 }
+  'raptor-mini': {
+    provider: 'github',
+    input: 0.25,
+    cachedInput: 0.025,
+    cacheWrite: 0,
+    output: 2
+  },
+  goldeneye: {
+    provider: 'github',
+    input: 1.25,
+    cachedInput: 0.125,
+    cacheWrite: 0,
+    output: 10
+  }
 }
 
 const normalizeModelId = (modelId: string): string => {
@@ -94,6 +228,7 @@ export const computeCost = (counts: ModelTokenCounts): number | null => {
 }
 
 export type CostTier = '$' | '$$' | '$$$'
+export type SessionCostCategory = CostTier | 'unavailable'
 
 export const costTier = (costUsd: number | null): CostTier | null => {
   if (costUsd === null || costUsd === undefined || Number.isNaN(costUsd)) {
@@ -102,4 +237,30 @@ export const costTier = (costUsd: number | null): CostTier | null => {
   if (costUsd < 2) return '$'
   if (costUsd < 5) return '$$'
   return '$$$'
+}
+
+export const sessionEstimatedCost = (
+  usage: SessionTokenUsage | undefined
+): number | null => {
+  if (!usage || usage.source === 'unavailable') {
+    return null
+  }
+
+  let total = 0
+  let priced = false
+  for (const model of usage.byModel) {
+    const cost = computeCost(model)
+    if (cost !== null) {
+      total += cost
+      priced = true
+    }
+  }
+
+  return priced ? total : null
+}
+
+export const sessionCostCategory = (
+  usage: SessionTokenUsage | undefined
+): SessionCostCategory => {
+  return costTier(sessionEstimatedCost(usage)) ?? 'unavailable'
 }

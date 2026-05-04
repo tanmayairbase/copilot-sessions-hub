@@ -26,7 +26,9 @@ const usage = (
   return { source, byModel, totals }
 }
 
-const m = (overrides: Partial<ModelTokenUsage> & { modelId: string }): ModelTokenUsage => ({
+const m = (
+  overrides: Partial<ModelTokenUsage> & { modelId: string }
+): ModelTokenUsage => ({
   inputTokens: 0,
   cachedInputTokens: 0,
   cacheWriteTokens: 0,
@@ -41,7 +43,11 @@ describe('SessionCostChip', () => {
     render(
       <SessionCostChip
         usage={usage([
-          m({ modelId: 'gpt-5.4-mini', inputTokens: 100_000, outputTokens: 100_000 })
+          m({
+            modelId: 'gpt-5.4-mini',
+            inputTokens: 100_000,
+            outputTokens: 100_000
+          })
         ])}
       />
     )
@@ -95,11 +101,35 @@ describe('SessionCostChip', () => {
     const { container } = render(
       <SessionCostChip
         usage={usage([
-          m({ modelId: 'completely-unknown-model', inputTokens: 1000, outputTokens: 1000 })
+          m({
+            modelId: 'completely-unknown-model',
+            inputTokens: 1000,
+            outputTokens: 1000
+          })
         ])}
       />
     )
     expect(container.firstChild).toBeNull()
+  })
+
+  it('still renders a tier when the session mixes priced and unpriced models', () => {
+    render(
+      <SessionCostChip
+        usage={usage([
+          m({
+            modelId: 'gpt-5.4',
+            inputTokens: 200_000,
+            outputTokens: 200_000
+          }),
+          m({
+            modelId: 'completely-unknown-model',
+            inputTokens: 999_999,
+            outputTokens: 999_999
+          })
+        ])}
+      />
+    )
+    expect(screen.getByTestId('session-cost-chip').textContent).toBe('$$')
   })
 
   it('renders nothing when usage prop is missing', () => {

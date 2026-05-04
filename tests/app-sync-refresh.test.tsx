@@ -65,6 +65,29 @@ const buildDetail = (messageCount: number): SessionDetail => ({
   }))
 })
 
+const buildUsage = (
+  byModel: NonNullable<SessionSummary['tokenUsage']>['byModel']
+): NonNullable<SessionSummary['tokenUsage']> => ({
+  source: 'cli-shutdown',
+  byModel,
+  totals: byModel.reduce(
+    (totals, model) => ({
+      inputTokens: totals.inputTokens + model.inputTokens,
+      cachedInputTokens: totals.cachedInputTokens + model.cachedInputTokens,
+      cacheWriteTokens: totals.cacheWriteTokens + model.cacheWriteTokens,
+      outputTokens: totals.outputTokens + model.outputTokens,
+      reasoningTokens: totals.reasoningTokens + model.reasoningTokens
+    }),
+    {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0
+    }
+  )
+})
+
 describe('App sync detail refresh', () => {
   afterEach(() => {
     cleanup()
@@ -285,7 +308,105 @@ describe('App sync detail refresh', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getAllByText('Hidden sub-agent session').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('Hidden sub-agent session').length
+      ).toBeGreaterThan(0)
+    })
+  })
+
+  it('filters sessions by estimated cost tiers and unavailable bucket', async () => {
+    const budgetSession: SessionSummary = {
+      ...baseSession,
+      id: 'session-budget',
+      title: 'Budget session',
+      tokenUsage: buildUsage([
+        {
+          modelId: 'gpt-5.4-mini',
+          inputTokens: 100_000,
+          cachedInputTokens: 0,
+          cacheWriteTokens: 0,
+          outputTokens: 100_000,
+          reasoningTokens: 0
+        }
+      ])
+    }
+    const mediumSession: SessionSummary = {
+      ...baseSession,
+      id: 'session-medium',
+      title: 'Medium session',
+      tokenUsage: buildUsage([
+        {
+          modelId: 'gpt-5.4',
+          inputTokens: 200_000,
+          cachedInputTokens: 0,
+          cacheWriteTokens: 0,
+          outputTokens: 200_000,
+          reasoningTokens: 0
+        }
+      ])
+    }
+    const unavailableSession: SessionSummary = {
+      ...baseSession,
+      id: 'session-unavailable',
+      title: 'Unavailable session',
+      tokenUsage: buildUsage([
+        {
+          modelId: 'mystery-llm-9000',
+          inputTokens: 10_000,
+          cachedInputTokens: 0,
+          cacheWriteTokens: 0,
+          outputTokens: 10_000,
+          reasoningTokens: 0
+        }
+      ])
+    }
+
+    const sessions = [budgetSession, mediumSession, unavailableSession]
+    const api: RendererApi = {
+      getConfig: vi.fn(async () => config),
+      saveConfig: vi.fn(async () => config),
+      openConfigFile: vi.fn(async () => undefined),
+      syncSessions: vi.fn(async () => syncResult),
+      listSessions: vi.fn(async () => sessions),
+      getSessionDetail: vi.fn(async sessionId => {
+        const detail = buildDetail(1)
+        return {
+          ...detail,
+          ...(sessions.find(session => session.id === sessionId) ??
+            budgetSession),
+          messages: detail.messages
+        }
+      }),
+      openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
+      setSessionArchived: vi.fn(async () => null),
+      setMessageStarred: vi.fn(async () => null),
+      listStarredMessages: vi.fn(async () => [])
+    }
+
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Budget session').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Medium session').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Unavailable session').length).toBeGreaterThan(
+        0
+      )
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+    fireEvent.click(screen.getByLabelText('Estimated cost filter'))
+    fireEvent.click(screen.getByLabelText('Estimated cost: $$ ($2-$5)'))
+    fireEvent.click(screen.getByLabelText('Estimated cost: Unavailable'))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Budget session')).toBeNull()
+      expect(screen.getAllByText('Medium session').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Unavailable session').length).toBeGreaterThan(
+        0
+      )
     })
   })
 })

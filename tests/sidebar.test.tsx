@@ -63,6 +63,7 @@ const renderSidebar = (
   const onClearFilters = vi.fn()
   const onToggleRepo = vi.fn()
   const onToggleModel = vi.fn()
+  const onToggleEstimatedCost = vi.fn()
   const onToggleOrigin = vi.fn()
   const onDateFilterChange = vi.fn()
   const onArchivedFilterChange = vi.fn()
@@ -87,6 +88,9 @@ const renderSidebar = (
       modelOptions={['gpt-5.3-codex', 'claude-sonnet-4.5']}
       selectedModels={[]}
       onToggleModel={onToggleModel}
+      estimatedCostOptions={['$', '$$', '$$$', 'unavailable']}
+      selectedEstimatedCosts={[]}
+      onToggleEstimatedCost={onToggleEstimatedCost}
       originOptions={['vscode', 'cli', 'opencode']}
       selectedOrigins={[]}
       onToggleOrigin={onToggleOrigin}
@@ -111,6 +115,7 @@ const renderSidebar = (
     onClearFilters,
     onToggleRepo,
     onToggleModel,
+    onToggleEstimatedCost,
     onToggleOrigin,
     onDateFilterChange,
     onArchivedFilterChange,
@@ -130,6 +135,7 @@ describe('SessionListSidebar', () => {
       onQueryChange,
       onToggleRepo,
       onToggleModel,
+      onToggleEstimatedCost,
       onToggleOrigin,
       onDateFilterChange
     } = renderSidebar()
@@ -152,6 +158,10 @@ describe('SessionListSidebar', () => {
     fireEvent.click(screen.getByLabelText('Model filter'))
     fireEvent.click(screen.getByLabelText('Model: gpt-5.3-codex'))
     expect(onToggleModel).toHaveBeenCalledWith('gpt-5.3-codex')
+
+    fireEvent.click(screen.getByLabelText('Estimated cost filter'))
+    fireEvent.click(screen.getByLabelText('Estimated cost: $$ ($2-$5)'))
+    expect(onToggleEstimatedCost).toHaveBeenCalledWith('$$')
 
     fireEvent.click(screen.getByLabelText('Origin filter'))
     fireEvent.click(screen.getByLabelText('Origin: vscode'))

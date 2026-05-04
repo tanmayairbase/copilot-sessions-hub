@@ -11,11 +11,12 @@ import {
   toSearchPreview,
   toTildePath
 } from '@shared/format'
+import type { SessionCostCategory } from '../../../shared/pricing'
 import { SessionCostChip } from './SessionCostChip'
 
 type DateFilterValue = DateFilterPreset | ''
 type OriginFilterValue = SessionSource
-type FilterMenu = 'repository' | 'model' | 'origin' | null
+type FilterMenu = 'repository' | 'model' | 'estimatedCost' | 'origin' | null
 export type ArchivedFilterValue = 'hide' | 'show' | 'only'
 export type StarredFilterValue = 'all' | 'only'
 export type SubagentFilterValue = 'hide' | 'show'
@@ -37,6 +38,9 @@ interface Props {
   modelOptions: string[]
   selectedModels: string[]
   onToggleModel: (model: string) => void
+  estimatedCostOptions: SessionCostCategory[]
+  selectedEstimatedCosts: SessionCostCategory[]
+  onToggleEstimatedCost: (value: SessionCostCategory) => void
   originOptions: OriginFilterValue[]
   selectedOrigins: OriginFilterValue[]
   onToggleOrigin: (origin: OriginFilterValue) => void
@@ -58,6 +62,7 @@ interface MultiSelectProps {
   selected: string[]
   onToggle: (value: string) => void
   formatOption?: (value: string) => string
+  formatAriaOption?: (value: string) => string
   emptyLabel: string
   isOpen: boolean
   onOpen: (menu: Exclude<FilterMenu, null>) => void
@@ -77,6 +82,19 @@ interface VirtualizedSessionRowsProps {
 
 const getEstimatedRowSize = (index: number, total: number): number =>
   SESSION_ROW_HEIGHT_ESTIMATE + (index === total - 1 ? 0 : SESSION_ROW_GAP)
+
+const formatEstimatedCostOption = (value: SessionCostCategory): string => {
+  switch (value) {
+    case '$':
+      return '$ (<$2)'
+    case '$$':
+      return '$$ ($2-$5)'
+    case '$$$':
+      return '$$$ (>= $5)'
+    case 'unavailable':
+      return 'Unavailable'
+  }
+}
 
 const getOffsetTopWithin = (
   element: HTMLElement,
@@ -306,6 +324,7 @@ const MultiSelectFilter = ({
   selected,
   onToggle,
   formatOption,
+  formatAriaOption,
   emptyLabel,
   isOpen,
   onOpen
@@ -329,17 +348,23 @@ const MultiSelectFilter = ({
           aria-multiselectable="true"
         >
           {options.length === 0 && <p className="filter-empty">{emptyLabel}</p>}
-          {options.map(option => (
-            <label key={option} className="filter-option">
-              <input
-                type="checkbox"
-                checked={selected.includes(option)}
-                onChange={() => onToggle(option)}
-                aria-label={`${label}: ${option}`}
-              />
-              <span>{formatOption ? formatOption(option) : option}</span>
-            </label>
-          ))}
+          {options.map(option => {
+            const optionLabel = formatOption ? formatOption(option) : option
+            const optionAriaLabel = formatAriaOption
+              ? formatAriaOption(option)
+              : option
+            return (
+              <label key={option} className="filter-option">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(option)}
+                  onChange={() => onToggle(option)}
+                  aria-label={`${label}: ${optionAriaLabel}`}
+                />
+                <span>{optionLabel}</span>
+              </label>
+            )
+          })}
         </div>
       )}
     </div>
@@ -363,6 +388,9 @@ export const SessionListSidebar = ({
   modelOptions,
   selectedModels,
   onToggleModel,
+  estimatedCostOptions,
+  selectedEstimatedCosts,
+  onToggleEstimatedCost,
   originOptions,
   selectedOrigins,
   onToggleOrigin,
@@ -477,7 +505,9 @@ export const SessionListSidebar = ({
           <span>{formatTimestampIST(session.updatedAt)}</span>
         </div>
         <div className="session-path">
-          <span className="session-path-text">{toTildePath(session.repoPath)}</span>
+          <span className="session-path-text">
+            {toTildePath(session.repoPath)}
+          </span>
           <SessionCostChip usage={session.tokenUsage} />
         </div>
       </button>
@@ -558,6 +588,24 @@ export const SessionListSidebar = ({
               onToggle={onToggleModel}
               emptyLabel="No model values yet"
               isOpen={openMenu === 'model'}
+              onOpen={toggleMenu}
+            />
+            <MultiSelectFilter
+              menuId="estimatedCost"
+              label="Estimated cost"
+              options={estimatedCostOptions}
+              selected={selectedEstimatedCosts}
+              onToggle={value =>
+                onToggleEstimatedCost(value as SessionCostCategory)
+              }
+              formatOption={value =>
+                formatEstimatedCostOption(value as SessionCostCategory)
+              }
+              formatAriaOption={value =>
+                formatEstimatedCostOption(value as SessionCostCategory)
+              }
+              emptyLabel="No cost buckets available"
+              isOpen={openMenu === 'estimatedCost'}
               onOpen={toggleMenu}
             />
             <MultiSelectFilter
