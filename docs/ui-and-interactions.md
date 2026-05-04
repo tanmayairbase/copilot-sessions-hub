@@ -45,10 +45,11 @@ Primary file:
 Current behavior:
 
 - debounced free-text search
-- filters for repository, model, origin, date, archived, and starred
+- filters for repository, model, estimated cost, origin, date, archived, starred, and sub-agent sessions
 - archived sessions hidden by default
 - separate archived-match handling during search
 - local archive/unarchive actions
+- session rows show an estimated cost chip (`$`, `$$`, `$$$`) when a session total can be priced
 - virtualized rows once the list is large enough
 
 Important list constants:
@@ -68,6 +69,7 @@ Current behavior:
 - read-only transcript
 - markdown and ANSI rendering
 - artifact chips for references and edits
+- token-usage visualization and estimated-cost detail when token pricing data is available
 - message starring
 - grouped same-role messages within the same IST minute
 - chunked transcript rendering with `Load older messages`
@@ -165,4 +167,3 @@ Those actions reopen context in source tools; they do not embed those tools insi
 - keep new metadata close to where it matters
 - prefer simple filters over complex query builders
 - optimize for quick scanning and easy return to source tools
-

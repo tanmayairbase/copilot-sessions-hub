@@ -81,7 +81,9 @@ docs/          contributor documentation
 | `tests/storage-retention.test.ts` | retention, stars, archive behavior |
 | `tests/storage-perf-benchmark.test.ts` | high-volume storage performance checks |
 | `tests/sync-incremental.test.ts` | incremental sync behavior |
+| `tests/pricing.test.ts` | pricing rates and estimated-cost categorization |
 | `tests/sidebar.test.tsx` | sidebar filtering/rendering |
+| `tests/session-cost-chip.test.tsx` | session cost chip behavior |
 | `tests/session-detail-grouping.test.tsx` | detail transcript behavior |
 | `tests/app-sync-refresh.test.tsx` | selected detail refresh after sync |
 | `tests/external-links.test.ts` | external link rules |

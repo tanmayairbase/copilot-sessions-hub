@@ -47,7 +47,7 @@ These docs explain:
 | Sidebar/filter UX | `src/renderer/src/components/SessionListSidebar.tsx` |
 | Session detail | `src/renderer/src/components/SessionDetailView.tsx` |
 | Settings UI | `src/renderer/src/components/SettingsModal.tsx` |
-| Shared contracts/helpers | `src/shared/types.ts`, `src/shared/format.ts`, `src/shared/links.ts` |
+| Shared contracts/helpers | `src/shared/types.ts`, `src/shared/format.ts`, `src/shared/links.ts`, `src/shared/pricing.ts` |
 
 ## Guiding principles
 
@@ -64,4 +64,3 @@ These docs explain:
 3. Make the narrowest safe change.
 4. Update docs if behavior or architecture changed.
 5. Run the validation commands from `development-guide.md`.
-

@@ -38,7 +38,8 @@
 
 - Aggregates sessions from Copilot CLI, VS Code Copilot Chat, and OpenCode into one desktop view.
 - Syncs from configurable repository roots and keeps synced history locally for later rediscovery.
-- Provides full-text search plus repository, model, origin, date, archived, and starred filters.
+- Provides full-text search plus repository, model, estimated cost, origin, date, archived, starred, and sub-agent filters.
+- Surfaces per-session estimated cost as `$`, `$$`, or `$$$` chips when pricing data is available, with an `Unavailable` filter bucket when no total can be computed.
 - Renders a read-only chat-style session detail view with model metadata, IST timestamps, and external-link support.
 - Supports local organization with starring, archiving, archived history handling, and quick jumps back to important messages.
 - Includes a resizable sidebar, settings UI, editable JSON config, and optional background sync.

@@ -22,6 +22,7 @@ The current product is optimized for:
 
 - syncing local session history from multiple sources
 - full-text search plus lightweight filtering
+- fast cost-aware scanning with estimated cost chips and filtering when pricing metadata exists
 - read-only transcript review
 - local organization with starring and archiving
 - jumping back to source tools when deeper action is needed
@@ -58,4 +59,3 @@ The app does **not** currently aim to:
 - expose hidden or raw chain-of-thought
 - sync data to a backend
 - become a multi-user collaboration product
-

@@ -162,4 +162,4 @@ Main IPC channels:
 | `src/main/openers.ts` | open-in-tool behavior |
 | `src/preload/index.ts` | typed renderer bridge |
 | `src/renderer/src/App.tsx` | top-level UI orchestration |
-
+| `src/shared/pricing.ts` | shared pricing rates and estimated-cost categorization |

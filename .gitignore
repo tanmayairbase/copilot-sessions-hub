@@ -4,6 +4,7 @@ release
 coverage
 .DS_Store
 .vscode
+.idea
 
 .agents/skills
 skills-lock.json
