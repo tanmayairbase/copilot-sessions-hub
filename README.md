@@ -19,7 +19,8 @@
 </p>
 
 <p align="center">
-  <img width="1398" height="901" alt="Copilot Sessions Hub screenshot" src="https://github.com/user-attachments/assets/274fa0f2-f7e5-48ab-b15c-183f029b8f09" />
+  <img width="1727" height="1082" alt="Copilot_Sessions_Hub" src="https://github.com/user-attachments/assets/b3a510b8-58d8-466c-845a-92f8884402ca" />
+
 </p>
 
 ## Pain points this app addresses
