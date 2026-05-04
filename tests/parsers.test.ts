@@ -662,6 +662,61 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].messages[3].content).toContain('flushSync')
   })
 
+  it('preserves VS Code inline file references inside assistant text', () => {
+    const raw = [
+      JSON.stringify({
+        kind: 0,
+        v: {
+          version: 3,
+          creationDate: 1773303028706,
+          sessionId: 'vscode-inline-ref-1',
+          customTitle: 'Inline reference preservation',
+          requests: []
+        }
+      }),
+      JSON.stringify({
+        kind: 2,
+        k: ['requests'],
+        v: [
+          {
+            requestId: 'request-inline-ref-1',
+            timestamp: 1773306051847,
+            modelId: 'copilot/gpt-5.4',
+            message: { text: 'Where is the fix?' },
+            response: []
+          }
+        ]
+      }),
+      JSON.stringify({
+        kind: 2,
+        k: ['requests', 0, 'response'],
+        v: [
+          { value: 'The fix is in' },
+          {
+            kind: 'inlineReference',
+            name: 'src/dashboard/withCommonProps.tsx',
+            inlineReference: {
+              fsPath: '/tmp/repo-vscode/src/dashboard/withCommonProps.tsx'
+            }
+          },
+          { value: '. I replaced the wrapper.' }
+        ]
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/Library/Application Support/Code/User/workspaceStorage/ws/chatSessions/vscode-inline-ref-1.jsonl',
+      repoRoot: '/tmp/repo-vscode',
+      source: 'vscode'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].messages[1].content).toBe(
+      'The fix is in `withCommonProps.tsx`. I replaced the wrapper.'
+    )
+  })
+
   it('extracts token usage from the last session.shutdown event', () => {
     const raw = [
       JSON.stringify({

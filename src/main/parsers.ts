@@ -964,6 +964,42 @@ const pathFromUriLike = (value: unknown): string | null => {
   return external
 }
 
+const formatInlineReferenceText = (item: Record<string, unknown>): string | null => {
+  const reference = toRecord(item.reference)
+  const inlineReference = toRecord(item.inlineReference)
+  const location = toRecord(item.location)
+  const target = toRecord(item.target)
+  const uriPath =
+    pathFromUriLike(item.uri) ??
+    pathFromUriLike(inlineReference) ??
+    pathFromUriLike(reference?.uri) ??
+    pathFromUriLike(location?.uri) ??
+    pathFromUriLike(target?.uri)
+  const rawLabel =
+    firstString(
+      item.label,
+      item.name,
+      item.text,
+      item.value,
+      reference?.label,
+      reference?.name,
+      reference?.text,
+      location?.label,
+      location?.name,
+      target?.label,
+      target?.name
+    ) ??
+    (uriPath ? basename(uriPath) : null)
+
+  const label = rawLabel ? basename(rawLabel.replaceAll('\\', '/')) : null
+
+  if (!label) {
+    return null
+  }
+
+  return `\`${label}\``
+}
+
 const extractVsCodeReferences = (
   request: Record<string, unknown>
 ): NonNullable<SessionMessage['references']> => {
@@ -1131,7 +1167,6 @@ const extractVsCodeAssistantText = (
     'texteditgroup',
     'codeblockuri',
     'undostop',
-    'inlinereference',
     'questioncarousel',
     'progresstaskserialized',
     'progressmessage',
@@ -1139,6 +1174,23 @@ const extractVsCodeAssistantText = (
     'preparetoolinvocation'
   ])
   const chunks: string[] = []
+  const appendInlineChunk = (content: string): void => {
+    if (!content) {
+      return
+    }
+
+    if (chunks.length === 0) {
+      chunks.push(content)
+      return
+    }
+
+    const lastIndex = chunks.length - 1
+    const previous = chunks[lastIndex]
+    const needsSpace =
+      !/[\s([{]$/.test(previous) && !/^[\s).,;:!?}\]]/.test(content)
+    chunks[lastIndex] = `${previous}${needsSpace ? ' ' : ''}${content}`
+  }
+
   for (const responseItem of responseItems) {
     const item = toRecord(responseItem)
     if (!item) {
@@ -1146,6 +1198,13 @@ const extractVsCodeAssistantText = (
     }
     const kind = firstString(item.kind)?.toLowerCase()
     if (kind && ignoredKinds.has(kind)) {
+      continue
+    }
+    if (kind === 'inlinereference') {
+      const inlineReference = formatInlineReferenceText(item)
+      if (inlineReference) {
+        appendInlineChunk(inlineReference)
+      }
       continue
     }
 
@@ -1164,6 +1223,10 @@ const extractVsCodeAssistantText = (
       continue
     }
     if (/^```[\w-]*$/.test(trimmed)) {
+      continue
+    }
+    if (/^[).,;:!?]/.test(trimmed)) {
+      appendInlineChunk(trimmed)
       continue
     }
     chunks.push(trimmed)
