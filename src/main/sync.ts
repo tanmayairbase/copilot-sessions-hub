@@ -21,7 +21,7 @@ import {
 } from './storage'
 
 const MAX_FILE_SIZE_BYTES = 64 * 1024 * 1024
-const ARTIFACT_CACHE_PARSER_VERSION = 12
+const ARTIFACT_CACHE_PARSER_VERSION = 13
 
 const expandHome = (value: string): string =>
   value.startsWith('~/') ? join(homedir(), value.slice(2)) : value
@@ -140,7 +140,9 @@ const detectSourceFromFilePath = (filePath: string): SessionSource =>
     ? 'vscode'
     : 'cli'
 
-const cliSummaryToken = (cliSummaryBySessionId: Map<string, string>): string => {
+const cliSummaryToken = (
+  cliSummaryBySessionId: Map<string, string>
+): string => {
   if (cliSummaryBySessionId.size === 0) {
     return ''
   }
@@ -239,49 +241,52 @@ export const syncSessions = async (
   const files = new Set<string>()
   const scanStartedAt = performance.now()
 
-  const [repoRootEntries, globalEntries, globalVsCodeEntries] = await Promise.all([
-    Promise.all(
-      repoRoots.map(async root => {
-        try {
-          const stat = await fs.stat(root)
-          if (!stat.isDirectory()) {
-            logWarn('Configured repo root is not a directory, skipping', { root })
+  const [repoRootEntries, globalEntries, globalVsCodeEntries] =
+    await Promise.all([
+      Promise.all(
+        repoRoots.map(async root => {
+          try {
+            const stat = await fs.stat(root)
+            if (!stat.isDirectory()) {
+              logWarn('Configured repo root is not a directory, skipping', {
+                root
+              })
+              return []
+            }
+          } catch (error) {
+            logWarn('Configured repo root does not exist, skipping', {
+              root,
+              reason: (error as Error).message
+            })
             return []
           }
-        } catch (error) {
-          logWarn('Configured repo root does not exist, skipping', {
-            root,
-            reason: (error as Error).message
-          })
-          return []
-        }
 
-        const rootEntries = await fg(patterns, {
-          cwd: root,
-          absolute: true,
-          onlyFiles: true,
-          suppressErrors: true,
-          unique: true,
-          ignore: artifactDiscoveryIgnore
+          const rootEntries = await fg(patterns, {
+            cwd: root,
+            absolute: true,
+            onlyFiles: true,
+            suppressErrors: true,
+            unique: true,
+            ignore: artifactDiscoveryIgnore
+          })
+          logInfo('Scanned repo root', { root, filesFound: rootEntries.length })
+          return rootEntries
         })
-        logInfo('Scanned repo root', { root, filesFound: rootEntries.length })
-        return rootEntries
+      ),
+      fg(globalCopilotPattern, {
+        absolute: true,
+        onlyFiles: true,
+        suppressErrors: true,
+        unique: true,
+        ignore: ['**/node_modules/**', '**/.git/**']
+      }),
+      fg(globalVsCodeChatPattern, {
+        absolute: true,
+        onlyFiles: true,
+        suppressErrors: true,
+        unique: true
       })
-    ),
-    fg(globalCopilotPattern, {
-      absolute: true,
-      onlyFiles: true,
-      suppressErrors: true,
-      unique: true,
-      ignore: ['**/node_modules/**', '**/.git/**']
-    }),
-    fg(globalVsCodeChatPattern, {
-      absolute: true,
-      onlyFiles: true,
-      suppressErrors: true,
-      unique: true
-    })
-  ])
+    ])
 
   for (const rootEntries of repoRootEntries) {
     for (const entry of rootEntries) {
@@ -339,12 +344,12 @@ export const syncSessions = async (
       const cached = previousArtifactCache.get(filePath)
       const unchanged = Boolean(
         cached &&
-          cached.mtimeMs === stat.mtimeMs &&
-          cached.size === stat.size &&
-          cached.repoRoot === repoRoot &&
-          cached.source === source &&
-          cached.cliSummaryToken === cacheToken &&
-          cached.parserVersion === ARTIFACT_CACHE_PARSER_VERSION
+        cached.mtimeMs === stat.mtimeMs &&
+        cached.size === stat.size &&
+        cached.repoRoot === repoRoot &&
+        cached.source === source &&
+        cached.cliSummaryToken === cacheToken &&
+        cached.parserVersion === ARTIFACT_CACHE_PARSER_VERSION
       )
       if (unchanged && cached) {
         skippedUnchanged += 1

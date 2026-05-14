@@ -176,7 +176,7 @@ describe('parseSessionArtifacts', () => {
     expect(parsed[0].session.isSubagentSession).toBe(false)
   })
 
-  it('detects custom CLI agent from transformed instructions when subagent event is absent', () => {
+  it('detects custom CLI agent from transformed instructions without marking the session as a sub-agent', () => {
     const raw = [
       JSON.stringify({
         type: 'session.start',
@@ -215,7 +215,7 @@ describe('parseSessionArtifacts', () => {
     expect(parsed).toHaveLength(1)
     expect(parsed[0].session.source).toBe('cli')
     expect(parsed[0].session.agent).toBe('any-removal-first-migration-agent')
-    expect(parsed[0].session.isSubagentSession).toBe(true)
+    expect(parsed[0].session.isSubagentSession).toBe(false)
     expect(parsed[0].messages[0]?.content).toBe('let us continue')
   })
 
