@@ -21,7 +21,7 @@ import {
 } from './storage'
 
 const MAX_FILE_SIZE_BYTES = 64 * 1024 * 1024
-const ARTIFACT_CACHE_PARSER_VERSION = 13
+const ARTIFACT_CACHE_PARSER_VERSION = 14
 
 const expandHome = (value: string): string =>
   value.startsWith('~/') ? join(homedir(), value.slice(2)) : value
@@ -41,24 +41,43 @@ const artifactDiscoveryIgnore = [
   '**/release/**'
 ]
 
-const globalCopilotPattern = join(
-  homedir(),
-  '.copilot',
-  'session-state',
-  '**',
-  '*.{json,jsonl}'
-)
-const globalVsCodeChatPattern = join(
-  homedir(),
-  'Library',
-  'Application Support',
-  'Code',
-  'User',
-  'workspaceStorage',
-  '*',
-  'chatSessions',
-  '*.jsonl'
-)
+const normalizeGlobPath = (value: string): string => value.replace(/\\/g, '/')
+
+export const getGlobalCopilotPattern = (
+  home: string = homedir()
+): string => {
+  const normalizedHome = normalizeGlobPath(home)
+  return `${normalizedHome}/.copilot/session-state/**/*.{json,jsonl}`
+}
+
+export const getGlobalVsCodeChatPattern = (
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir(),
+  appData: string = process.env.APPDATA || home
+): string => {
+  const normalizedHome = normalizeGlobPath(home)
+  const normalizedAppData = normalizeGlobPath(appData)
+
+  if (platform === 'darwin') {
+    return `${normalizedHome}/Library/Application Support/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+  }
+  if (platform === 'win32') {
+    return `${normalizedAppData}/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+  }
+  // Linux
+  return `${normalizedHome}/.config/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+}
+
+const globalCopilotPattern = (() => {
+  const home = homedir()
+  return getGlobalCopilotPattern(home)
+})()
+
+const globalVsCodeChatPattern = (() => {
+  const home = homedir()
+  const appData = process.env.APPDATA || home
+  return getGlobalVsCodeChatPattern(process.platform, home, appData)
+})()
 const COPILOT_SESSION_STORE_DB_PATH = join(
   homedir(),
   '.copilot',
@@ -295,14 +314,16 @@ export const syncSessions = async (
   }
 
   logInfo('Scanned global copilot session path', {
-    filesFound: globalEntries.length
+    filesFound: globalEntries.length,
+    pattern: globalCopilotPattern
   })
   for (const entry of globalEntries) {
     files.add(entry)
   }
 
   logInfo('Scanned VS Code workspace chat sessions', {
-    filesFound: globalVsCodeEntries.length
+    filesFound: globalVsCodeEntries.length,
+    pattern: globalVsCodeChatPattern
   })
   for (const entry of globalVsCodeEntries) {
     files.add(entry)
