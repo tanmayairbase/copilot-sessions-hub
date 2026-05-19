@@ -20,26 +20,28 @@ const appConfigSchema = z.object({
   backgroundSyncIntervalMinutes: z.number().int().default(10)
 })
 
-const expandHome = (value: string): string => {
+const expandHome = (value: string, home: string = homedir()): string => {
   if (value.startsWith('~/')) {
-    return join(homedir(), value.slice(2))
+    return join(home, value.slice(2))
   }
   return value
 }
 
-const getPlatformDefaultRoots = (): string[] => {
-  const home = homedir()
+export const getPlatformDefaultRoots = (
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir()
+): string[] => {
   // Mac-specific defaults
-  if (process.platform === 'darwin') {
+  if (platform === 'darwin') {
     return [
       '~/projects/airbase-frontend',
       '~/projects/frontend2',
       '~/projects',
       '~/projects/Airbase.Playwright.Automation.Suite'
-    ].map(expandHome)
+    ].map(value => expandHome(value, home))
   }
   // Windows-specific defaults
-  if (process.platform === 'win32') {
+  if (platform === 'win32') {
     return [
       join(home, 'projects'),
       join(home, 'Documents'),
@@ -63,7 +65,7 @@ export class ConfigService {
   private normalizeConfig(config: AppConfig): AppConfig {
     const repoRoots =
       config.repoRoots.length > 0
-        ? config.repoRoots.map(expandHome)
+        ? config.repoRoots.map(value => expandHome(value))
         : defaultRoots
     const explicitPatterns =
       config.explicitPatterns.length > 0
@@ -92,7 +94,7 @@ export class ConfigService {
       const parsed = appConfigSchema.parse(JSON.parse(raw))
       const normalized = this.normalizeConfig({
         ...parsed,
-        repoRoots: parsed.repoRoots.map(expandHome)
+        repoRoots: parsed.repoRoots.map(value => expandHome(value))
       })
 
       if (

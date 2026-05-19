@@ -41,26 +41,43 @@ const artifactDiscoveryIgnore = [
   '**/release/**'
 ]
 
-const globalCopilotPattern = (() => {
-  const home = homedir().replace(/\\/g, '/')
-  return `${home}/.copilot/session-state/**/*.{json,jsonl}`
-})()
+const normalizeGlobPath = (value: string): string => value.replace(/\\/g, '/')
 
-const getGlobalVsCodeChatPattern = (): string => {
-  const home = homedir().replace(/\\/g, '/')
-  const appData = (process.env.APPDATA || home).replace(/\\/g, '/')
-  
-  if (process.platform === 'darwin') {
-    return `${home}/Library/Application Support/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
-  }
-  if (process.platform === 'win32') {
-    return `${appData}/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
-  }
-  // Linux
-  return `${home}/.config/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+export const getGlobalCopilotPattern = (
+  home: string = homedir()
+): string => {
+  const normalizedHome = normalizeGlobPath(home)
+  return `${normalizedHome}/.copilot/session-state/**/*.{json,jsonl}`
 }
 
-const globalVsCodeChatPattern = getGlobalVsCodeChatPattern()
+export const getGlobalVsCodeChatPattern = (
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir(),
+  appData: string = process.env.APPDATA || home
+): string => {
+  const normalizedHome = normalizeGlobPath(home)
+  const normalizedAppData = normalizeGlobPath(appData)
+
+  if (platform === 'darwin') {
+    return `${normalizedHome}/Library/Application Support/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+  }
+  if (platform === 'win32') {
+    return `${normalizedAppData}/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+  }
+  // Linux
+  return `${normalizedHome}/.config/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+}
+
+const globalCopilotPattern = (() => {
+  const home = homedir()
+  return getGlobalCopilotPattern(home)
+})()
+
+const globalVsCodeChatPattern = (() => {
+  const home = homedir()
+  const appData = process.env.APPDATA || home
+  return getGlobalVsCodeChatPattern(process.platform, home, appData)
+})()
 const COPILOT_SESSION_STORE_DB_PATH = join(
   homedir(),
   '.copilot',
