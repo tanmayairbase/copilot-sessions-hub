@@ -1,9 +1,11 @@
-// Show what the pattern looks like
-import { homedir } from 'os';
-import { join } from 'path';
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+const normalizeGlobPath = (value: string): string => value.replace(/\\/g, '/')
 
 const getGlobalVsCodeChatPattern = (): string => {
   let pattern: string
+
   if (process.platform === 'darwin') {
     pattern = join(
       homedir(),
@@ -27,7 +29,6 @@ const getGlobalVsCodeChatPattern = (): string => {
       '*.jsonl'
     )
   } else {
-    // Linux
     pattern = join(
       homedir(),
       '.config',
@@ -39,11 +40,11 @@ const getGlobalVsCodeChatPattern = (): string => {
       '*.jsonl'
     )
   }
-  // fast-glob on Windows requires forward slashes, not backslashes
-  return pattern.replaceAll('\\', '/')
+
+  return normalizeGlobPath(pattern)
 }
 
-console.log('Platform:', process.platform);
-console.log('APPDATA:', process.env.APPDATA);
-console.log('Pattern (after fix):');
-console.log(' ', getGlobalVsCodeChatPattern());
+console.log('Platform:', process.platform)
+console.log('APPDATA:', process.env.APPDATA ?? '(not set)')
+console.log('Pattern (after fix):')
+console.log(' ', getGlobalVsCodeChatPattern())

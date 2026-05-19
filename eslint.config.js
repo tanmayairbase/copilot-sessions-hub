@@ -11,6 +11,7 @@ export default [
   js.configs.recommended,
   {
     files: [
+      '*.ts',
       'src/**/*.{ts,tsx}',
       'tests/**/*.{ts,tsx}',
       'electron.vite.config.ts'
