@@ -27,12 +27,33 @@ const expandHome = (value: string): string => {
   return value
 }
 
-const defaultRoots = [
-  '~/projects/airbase-frontend',
-  '~/projects/frontend2',
-  '~/projects',
-  '~/projects/Airbase.Playwright.Automation.Suite'
-].map(expandHome)
+const getPlatformDefaultRoots = (): string[] => {
+  const home = homedir()
+  // Mac-specific defaults
+  if (process.platform === 'darwin') {
+    return [
+      '~/projects/airbase-frontend',
+      '~/projects/frontend2',
+      '~/projects',
+      '~/projects/Airbase.Playwright.Automation.Suite'
+    ].map(expandHome)
+  }
+  // Windows-specific defaults
+  if (process.platform === 'win32') {
+    return [
+      join(home, 'projects'),
+      join(home, 'Documents'),
+      join(home, 'source')
+    ]
+  }
+  // Linux defaults
+  return [
+    join(home, 'projects'),
+    join(home, 'code')
+  ]
+}
+
+const defaultRoots = getPlatformDefaultRoots()
 
 export class ConfigService {
   private cachedConfig: AppConfig | null = null

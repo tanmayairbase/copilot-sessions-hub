@@ -4,7 +4,18 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ConfigService } from '../src/main/config'
 
-const defaultAirbaseRoot = join(homedir(), 'projects/airbase-frontend')
+const getExpectedDefaultRoot = (): string => {
+  const home = homedir()
+  if (process.platform === 'darwin') {
+    return join(home, 'projects/airbase-frontend')
+  }
+  if (process.platform === 'win32') {
+    return join(home, 'projects')
+  }
+  return join(home, 'projects')
+}
+
+const defaultExpectedRoot = getExpectedDefaultRoot()
 
 describe('ConfigService', () => {
   it('creates default config when file is missing', async () => {
@@ -14,7 +25,7 @@ describe('ConfigService', () => {
 
     const config = await service.load()
 
-    expect(config.repoRoots).toContain(defaultAirbaseRoot)
+    expect(config.repoRoots).toContain(defaultExpectedRoot)
     expect(config.discoveryMode).toBe('both')
     expect(config.explicitPatterns.length).toBeGreaterThan(0)
     expect(config.appearance).toBe('system')
@@ -38,7 +49,7 @@ describe('ConfigService', () => {
     const service = new ConfigService(configPath)
     const config = await service.load()
 
-    expect(config.repoRoots).toContain(defaultAirbaseRoot)
+    expect(config.repoRoots).toContain(defaultExpectedRoot)
   })
 
   it('normalizes background sync settings', async () => {
@@ -47,7 +58,7 @@ describe('ConfigService', () => {
     await fs.writeFile(
       configPath,
       JSON.stringify({
-        repoRoots: [defaultAirbaseRoot],
+        repoRoots: [defaultExpectedRoot],
         discoveryMode: 'both',
         explicitPatterns: ['**/.copilot/**/*.json'],
         appearance: 'light',

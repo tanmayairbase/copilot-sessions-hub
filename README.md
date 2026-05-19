@@ -150,12 +150,22 @@ On macOS, cross-building Windows installers may download Wine/NSIS helper binari
 
 Settings are stored in user data `config.json`.
 
-Default repo roots on first run:
+Default repo roots on first run (platform-specific):
 
+**macOS:**
 - `~/projects/airbase-frontend`
 - `~/projects/frontend2`
 - `~/projects`
 - `~/projects/Airbase.Playwright.Automation.Suite`
+
+**Windows:**
+- `%USERPROFILE%\projects`
+- `%USERPROFILE%\Documents`
+- `%USERPROFILE%\source`
+
+**Linux:**
+- `~/projects`
+- `~/code`
 
 You can edit config from:
 

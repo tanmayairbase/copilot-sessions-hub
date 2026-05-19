@@ -21,7 +21,7 @@ import {
 } from './storage'
 
 const MAX_FILE_SIZE_BYTES = 64 * 1024 * 1024
-const ARTIFACT_CACHE_PARSER_VERSION = 13
+const ARTIFACT_CACHE_PARSER_VERSION = 14
 
 const expandHome = (value: string): string =>
   value.startsWith('~/') ? join(homedir(), value.slice(2)) : value
@@ -41,24 +41,26 @@ const artifactDiscoveryIgnore = [
   '**/release/**'
 ]
 
-const globalCopilotPattern = join(
-  homedir(),
-  '.copilot',
-  'session-state',
-  '**',
-  '*.{json,jsonl}'
-)
-const globalVsCodeChatPattern = join(
-  homedir(),
-  'Library',
-  'Application Support',
-  'Code',
-  'User',
-  'workspaceStorage',
-  '*',
-  'chatSessions',
-  '*.jsonl'
-)
+const globalCopilotPattern = (() => {
+  const home = homedir().replace(/\\/g, '/')
+  return `${home}/.copilot/session-state/**/*.{json,jsonl}`
+})()
+
+const getGlobalVsCodeChatPattern = (): string => {
+  const home = homedir().replace(/\\/g, '/')
+  const appData = (process.env.APPDATA || home).replace(/\\/g, '/')
+  
+  if (process.platform === 'darwin') {
+    return `${home}/Library/Application Support/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+  }
+  if (process.platform === 'win32') {
+    return `${appData}/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+  }
+  // Linux
+  return `${home}/.config/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
+}
+
+const globalVsCodeChatPattern = getGlobalVsCodeChatPattern()
 const COPILOT_SESSION_STORE_DB_PATH = join(
   homedir(),
   '.copilot',
@@ -295,14 +297,16 @@ export const syncSessions = async (
   }
 
   logInfo('Scanned global copilot session path', {
-    filesFound: globalEntries.length
+    filesFound: globalEntries.length,
+    pattern: globalCopilotPattern
   })
   for (const entry of globalEntries) {
     files.add(entry)
   }
 
   logInfo('Scanned VS Code workspace chat sessions', {
-    filesFound: globalVsCodeEntries.length
+    filesFound: globalVsCodeEntries.length,
+    pattern: globalVsCodeChatPattern
   })
   for (const entry of globalVsCodeEntries) {
     files.add(entry)
