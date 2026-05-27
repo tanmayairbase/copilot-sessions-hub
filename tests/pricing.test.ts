@@ -79,8 +79,7 @@ describe('priceFor', () => {
     ['gemini-2.5-pro', 'google', 1.25, 0.125, 0, 10],
     ['gemini-3-flash', 'google', 0.5, 0.05, 0, 3],
     ['gemini-3.1-pro', 'google', 2, 0.2, 0, 12],
-    // xAI
-    ['grok-code-fast-1', 'xai', 0.2, 0.02, 0, 1.5],
+    ['gemini-3.5-flash', 'google', 1.5, 0.15, 0, 9],
     // GitHub fine-tuned
     ['raptor-mini', 'github', 0.25, 0.025, 0, 2],
     ['goldeneye', 'github', 1.25, 0.125, 0, 10]
@@ -122,7 +121,7 @@ describe('providerOf', () => {
     ['claude-sonnet-4.6', 'anthropic'],
     ['gemini-3.1-pro-preview', 'google'],
     ['gemini-2.5-pro', 'google'],
-    ['grok-code-fast-1', 'xai'],
+    ['gemini-3.5-flash', 'google'],
     ['raptor-mini', 'github'],
     ['goldeneye', 'github']
   ])('classifies %s as %s', (modelId, provider) => {

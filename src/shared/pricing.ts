@@ -1,6 +1,6 @@
 import type { SessionTokenUsage } from './types'
 
-export type Provider = 'openai' | 'anthropic' | 'google' | 'xai' | 'github'
+export type Provider = 'openai' | 'anthropic' | 'google' | 'github'
 
 export interface ModelRate {
   provider: Provider
@@ -147,13 +147,12 @@ const RATES: Record<string, ModelRate> = {
     cacheWrite: 0,
     output: 12
   },
-  // xAI
-  'grok-code-fast-1': {
-    provider: 'xai',
-    input: 0.2,
-    cachedInput: 0.02,
+  'gemini-3.5-flash': {
+    provider: 'google',
+    input: 1.5,
+    cachedInput: 0.15,
     cacheWrite: 0,
-    output: 1.5
+    output: 9
   },
   // GitHub fine-tuned
   'raptor-mini': {
@@ -181,7 +180,6 @@ export const providerOf = (modelId: string): Provider | null => {
   if (m.startsWith('gpt-') || /^o[13](-|$)/.test(m)) return 'openai'
   if (m.startsWith('claude-')) return 'anthropic'
   if (m.startsWith('gemini-')) return 'google'
-  if (m.startsWith('grok-')) return 'xai'
   if (m === 'raptor-mini' || m === 'goldeneye') return 'github'
   return null
 }
