@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppConfig, SessionSource } from '../src/shared/types'
@@ -189,13 +189,7 @@ describe('syncSessions incremental parsing', () => {
       'general-chat-1',
       'events.jsonl'
     )
-    const chatCwd = join(
-      tempDir,
-      'home',
-      '.copilot',
-      'chats',
-      'scratch-chat-1'
-    )
+    const chatCwd = join(homedir(), '.copilot', 'chats', 'scratch-chat-1')
     const storage = new SessionStorage(join(tempDir, 'sessions-store.json'))
 
     fgMock.mockImplementation(
