@@ -12,6 +12,7 @@ const usage = (
       inputTokens: a.inputTokens + m.inputTokens,
       cachedInputTokens: a.cachedInputTokens + m.cachedInputTokens,
       cacheWriteTokens: a.cacheWriteTokens + m.cacheWriteTokens,
+      cacheWrite1hTokens: a.cacheWrite1hTokens + m.cacheWrite1hTokens,
       outputTokens: a.outputTokens + m.outputTokens,
       reasoningTokens: a.reasoningTokens + m.reasoningTokens
     }),
@@ -19,6 +20,7 @@ const usage = (
       inputTokens: 0,
       cachedInputTokens: 0,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 0,
       reasoningTokens: 0
     }
@@ -32,6 +34,7 @@ const m = (
   inputTokens: 0,
   cachedInputTokens: 0,
   cacheWriteTokens: 0,
+  cacheWrite1hTokens: 0,
   outputTokens: 0,
   reasoningTokens: 0,
   ...overrides

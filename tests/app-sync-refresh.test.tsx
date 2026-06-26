@@ -76,6 +76,7 @@ const buildUsage = (
       inputTokens: totals.inputTokens + model.inputTokens,
       cachedInputTokens: totals.cachedInputTokens + model.cachedInputTokens,
       cacheWriteTokens: totals.cacheWriteTokens + model.cacheWriteTokens,
+      cacheWrite1hTokens: totals.cacheWrite1hTokens + model.cacheWrite1hTokens,
       outputTokens: totals.outputTokens + model.outputTokens,
       reasoningTokens: totals.reasoningTokens + model.reasoningTokens
     }),
@@ -83,6 +84,7 @@ const buildUsage = (
       inputTokens: 0,
       cachedInputTokens: 0,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 0,
       reasoningTokens: 0
     }
@@ -326,6 +328,7 @@ describe('App sync detail refresh', () => {
           inputTokens: 100_000,
           cachedInputTokens: 0,
           cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
           outputTokens: 100_000,
           reasoningTokens: 0
         }
@@ -341,6 +344,7 @@ describe('App sync detail refresh', () => {
           inputTokens: 200_000,
           cachedInputTokens: 0,
           cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
           outputTokens: 200_000,
           reasoningTokens: 0
         }
@@ -356,6 +360,7 @@ describe('App sync detail refresh', () => {
           inputTokens: 10_000,
           cachedInputTokens: 0,
           cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
           outputTokens: 10_000,
           reasoningTokens: 0
         }
@@ -422,6 +427,7 @@ describe('App sync detail refresh', () => {
           inputTokens: 100_000,
           cachedInputTokens: 0,
           cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
           outputTokens: 100_000,
           reasoningTokens: 0
         }
@@ -437,6 +443,7 @@ describe('App sync detail refresh', () => {
           inputTokens: 200_000,
           cachedInputTokens: 0,
           cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
           outputTokens: 200_000,
           reasoningTokens: 0
         }
@@ -452,6 +459,7 @@ describe('App sync detail refresh', () => {
           inputTokens: 10_000,
           cachedInputTokens: 0,
           cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
           outputTokens: 10_000,
           reasoningTokens: 0
         }
@@ -536,6 +544,7 @@ describe('App sync detail refresh', () => {
           inputTokens: 100_000 + index * 10_000,
           cachedInputTokens: 0,
           cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
           outputTokens: 100_000 + index * 10_000,
           reasoningTokens: 0
         }

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { ModelTokenUsage, SessionTokenUsage } from '../src/shared/types'
 import {
+  computeClaudeCodeCost,
   computeCost,
   costTier,
   priceFor,
+  priceForClaudeCodeModel,
   providerOf,
   sessionCostCategory,
   sessionEstimatedCost
@@ -15,6 +17,7 @@ const modelUsage = (
   inputTokens: 0,
   cachedInputTokens: 0,
   cacheWriteTokens: 0,
+  cacheWrite1hTokens: 0,
   outputTokens: 0,
   reasoningTokens: 0,
   ...overrides
@@ -31,6 +34,7 @@ const usage = (
       inputTokens: totals.inputTokens + model.inputTokens,
       cachedInputTokens: totals.cachedInputTokens + model.cachedInputTokens,
       cacheWriteTokens: totals.cacheWriteTokens + model.cacheWriteTokens,
+      cacheWrite1hTokens: totals.cacheWrite1hTokens + model.cacheWrite1hTokens,
       outputTokens: totals.outputTokens + model.outputTokens,
       reasoningTokens: totals.reasoningTokens + model.reasoningTokens
     }),
@@ -38,6 +42,7 @@ const usage = (
       inputTokens: 0,
       cachedInputTokens: 0,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 0,
       reasoningTokens: 0
     }
@@ -111,6 +116,29 @@ describe('priceFor', () => {
   })
 })
 
+describe('priceForClaudeCodeModel', () => {
+  it('returns the Claude Code list-price rate for claude-opus-4-8, distinct from the Copilot rate table', () => {
+    expect(priceForClaudeCodeModel('claude-opus-4-8')).toEqual({
+      provider: 'anthropic',
+      input: 5,
+      cachedInput: 0.5,
+      cacheWrite: 6.25,
+      cacheWrite1h: 10,
+      output: 25
+    })
+  })
+
+  it('resolves a dated snapshot id to the same rate as the bare alias', () => {
+    expect(priceForClaudeCodeModel('claude-haiku-4-5-20251001')).toEqual(
+      priceForClaudeCodeModel('claude-haiku-4-5')
+    )
+  })
+
+  it('returns null for an unknown Claude model id', () => {
+    expect(priceForClaudeCodeModel('claude-made-up-model')).toBeNull()
+  })
+})
+
 describe('providerOf', () => {
   it.each([
     ['gpt-5.4', 'openai'],
@@ -142,6 +170,7 @@ describe('computeCost', () => {
       inputTokens: 249_568,
       cachedInputTokens: 211_328,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 4_904,
       reasoningTokens: 3_167
     })
@@ -158,6 +187,7 @@ describe('computeCost', () => {
       inputTokens: 100_000,
       cachedInputTokens: 50_000,
       cacheWriteTokens: 20_000,
+      cacheWrite1hTokens: 0,
       outputTokens: 4_000,
       reasoningTokens: 1_000
     })
@@ -173,6 +203,7 @@ describe('computeCost', () => {
       inputTokens: 1_000,
       cachedInputTokens: 1_200,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 100,
       reasoningTokens: 0
     })
@@ -186,6 +217,7 @@ describe('computeCost', () => {
         inputTokens: 1_000_000,
         cachedInputTokens: 0,
         cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
         outputTokens: 1_000_000,
         reasoningTokens: 0
       })
@@ -199,10 +231,82 @@ describe('computeCost', () => {
         inputTokens: 0,
         cachedInputTokens: 0,
         cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
         outputTokens: 0,
         reasoningTokens: 0
       })
     ).toBe(0)
+  })
+})
+
+describe('computeClaudeCodeCost', () => {
+  it('bills inputTokens in full without subtracting cachedInputTokens (cache-exclusive accounting)', () => {
+    // claude-sonnet-4-6: input=$3, cached=$0.3 per 1M.
+    // Claude's input_tokens already EXCLUDES cached tokens, unlike computeCost's
+    // assumption — so even though cachedInputTokens (200) <= inputTokens (1000)
+    // here, none of it should be subtracted from the input bill.
+    const cost = computeClaudeCodeCost({
+      modelId: 'claude-sonnet-4-6',
+      inputTokens: 1_000,
+      cachedInputTokens: 200,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0
+    })
+    // expected = (1000*3 + 200*0.3) / 1e6 = (3000 + 60) / 1e6 = 0.00306
+    expect(cost).toBeCloseTo(0.00306, 8)
+  })
+
+  it('bills the 5m and 1h cache-write buckets at their distinct rates', () => {
+    // claude-opus-4-8: cacheWrite (5m) = $6.25, cacheWrite1h = $10 per 1M.
+    const cost = computeClaudeCodeCost({
+      modelId: 'claude-opus-4-8',
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteTokens: 1_000,
+      cacheWrite1hTokens: 1_000,
+      outputTokens: 0,
+      reasoningTokens: 0
+    })
+    // expected = (1000*6.25 + 1000*10) / 1e6 = (6250 + 10000) / 1e6 = 0.01625
+    expect(cost).toBeCloseTo(0.01625, 8)
+  })
+
+  it('does not double-count reasoningTokens (already folded into outputTokens at the source)', () => {
+    const withoutReasoning = computeClaudeCodeCost({
+      modelId: 'claude-sonnet-4-6',
+      inputTokens: 1_000,
+      cachedInputTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+      outputTokens: 500,
+      reasoningTokens: 0
+    })
+    const withReasoning = computeClaudeCodeCost({
+      modelId: 'claude-sonnet-4-6',
+      inputTokens: 1_000,
+      cachedInputTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+      outputTokens: 500,
+      reasoningTokens: 9_999
+    })
+    expect(withReasoning).toBe(withoutReasoning)
+  })
+
+  it('returns null for an unknown Claude model', () => {
+    expect(
+      computeClaudeCodeCost({
+        modelId: 'claude-made-up-model',
+        inputTokens: 1_000_000,
+        cachedInputTokens: 0,
+        cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
+        outputTokens: 1_000_000,
+        reasoningTokens: 0
+      })
+    ).toBeNull()
   })
 })
 
@@ -260,6 +364,29 @@ describe('sessionEstimatedCost', () => {
     expect(sessionEstimatedCost(usage([], 'unavailable'))).toBeNull()
     expect(sessionEstimatedCost(undefined)).toBeNull()
   })
+
+  it('dispatches claude-messages usage to the Claude Code cost path, including the 1h cache-write bucket', () => {
+    // claude-opus-4-8 only exists in the Claude Code rate table (dash-form id),
+    // not the generic Copilot rate table (dot-form ids) — so if dispatch fell
+    // through to the generic computeCost path, priceFor would return null for
+    // this id and the whole session cost would be null instead of a real number.
+    const cost = sessionEstimatedCost(
+      usage(
+        [
+          modelUsage({
+            modelId: 'claude-opus-4-8',
+            inputTokens: 1_000,
+            cacheWriteTokens: 1_000,
+            cacheWrite1hTokens: 1_000,
+            outputTokens: 0
+          })
+        ],
+        'claude-messages'
+      )
+    )
+    // expected = (1000*5 + 1000*6.25 + 1000*10) / 1e6 = 21250 / 1e6 = 0.02125
+    expect(cost).toBeCloseTo(0.02125, 8)
+  })
 })
 
 describe('sessionCostCategory', () => {
@@ -311,5 +438,22 @@ describe('sessionCostCategory', () => {
         ])
       )
     ).toBe('unavailable')
+  })
+
+  it('maps a claude-messages session total into the shared cost tiers', () => {
+    expect(
+      sessionCostCategory(
+        usage(
+          [
+            modelUsage({
+              modelId: 'claude-opus-4-8',
+              inputTokens: 1_000_000,
+              outputTokens: 0
+            })
+          ],
+          'claude-messages'
+        )
+      )
+    ).toBe('$$$') // 1_000_000 * $5/1M = $5 -> $$$
   })
 })

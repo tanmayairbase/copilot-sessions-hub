@@ -126,6 +126,8 @@ interface MessageGroup {
   role: SessionMessage['role']
   mode?: SessionMessage['mode']
   combinedContent: string
+  thinking?: string
+  questions: NonNullable<SessionMessage['questions']>
   timestamp: string
   hasStarredMessage: boolean
   references: NonNullable<SessionMessage['references']>
@@ -196,6 +198,14 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
           }
         }
       }
+      if (message.thinking) {
+        last.thinking = last.thinking
+          ? `${last.thinking}\n\n${message.thinking}`
+          : message.thinking
+      }
+      if (message.questions) {
+        last.questions.push(...message.questions)
+      }
       continue
     }
 
@@ -206,6 +216,8 @@ const groupMessagesByMinute = (messages: SessionMessage[]): MessageGroup[] => {
       role: message.role,
       mode: message.mode,
       combinedContent: message.content,
+      thinking: message.thinking,
+      questions: message.questions ? [...message.questions] : [],
       timestamp: message.timestamp,
       hasStarredMessage: Boolean(message.userStarred),
       references: message.references ? [...message.references] : [],
@@ -444,6 +456,7 @@ export const SessionDetailView = ({
                 inputTokens: 0,
                 cachedInputTokens: 0,
                 cacheWriteTokens: 0,
+                cacheWrite1hTokens: 0,
                 outputTokens: 0,
                 reasoningTokens: 0
               }
@@ -551,6 +564,50 @@ export const SessionDetailView = ({
                         {delta}
                         {lineRange}
                       </span>
+                    )
+                  })}
+                </div>
+              )}
+              {message.thinking ? (
+                <details className="message-thinking">
+                  <summary>Thinking</summary>
+                  <div className="message-thinking-content">
+                    {message.thinking}
+                  </div>
+                </details>
+              ) : null}
+              {message.questions.length > 0 && (
+                <div className="message-questions">
+                  {message.questions.map((question, index) => {
+                    const matchedOption = question.options.find(
+                      option => option.label === question.answer
+                    )
+                    return (
+                      <div key={index} className="message-question">
+                        <div className="message-question-text">
+                          {question.question}
+                        </div>
+                        {matchedOption ? (
+                          <ul className="message-question-options">
+                            {question.options.map(option => (
+                              <li
+                                key={option.label}
+                                className={
+                                  option.label === question.answer
+                                    ? 'message-question-option-selected'
+                                    : undefined
+                                }
+                              >
+                                {option.label}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="message-question-answer">
+                            {question.answer}
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>

@@ -5,10 +5,10 @@ import type {
   ModelTokenUsage,
   SessionMessage,
   SessionSummary,
-  SessionTokenUsage,
-  SessionTokenUsageTotals
+  SessionTokenUsage
 } from '../shared/types'
 import { logError, logInfo, logWarn } from './logger'
+import { asNumber, sumModelTotals, ZERO_TOTALS } from './parsers/helpers'
 import { isWithinRepoRoots } from './repo-roots'
 import type { SessionInsert } from './storage'
 
@@ -204,17 +204,6 @@ export const isOpenCodeInternalMetadataSession = (
   })
 }
 
-const ZERO_OPENCODE_TOTALS: SessionTokenUsageTotals = {
-  inputTokens: 0,
-  cachedInputTokens: 0,
-  cacheWriteTokens: 0,
-  outputTokens: 0,
-  reasoningTokens: 0
-}
-
-const asNumber = (value: unknown): number =>
-  typeof value === 'number' && Number.isFinite(value) ? value : 0
-
 export const aggregateOpenCodeTokenUsage = (
   messageRows: OpenCodeMessageRow[]
 ): SessionTokenUsage => {
@@ -239,6 +228,7 @@ export const aggregateOpenCodeTokenUsage = (
       inputTokens: 0,
       cachedInputTokens: 0,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 0,
       reasoningTokens: 0
     }
@@ -254,23 +244,12 @@ export const aggregateOpenCodeTokenUsage = (
     return {
       source: 'unavailable',
       byModel: [],
-      totals: { ...ZERO_OPENCODE_TOTALS }
+      totals: { ...ZERO_TOTALS }
     }
   }
 
   const byModel = Array.from(perModel.values())
-  const totals = byModel.reduce<SessionTokenUsageTotals>(
-    (acc, entry) => ({
-      inputTokens: acc.inputTokens + entry.inputTokens,
-      cachedInputTokens: acc.cachedInputTokens + entry.cachedInputTokens,
-      cacheWriteTokens: acc.cacheWriteTokens + entry.cacheWriteTokens,
-      outputTokens: acc.outputTokens + entry.outputTokens,
-      reasoningTokens: acc.reasoningTokens + entry.reasoningTokens
-    }),
-    { ...ZERO_OPENCODE_TOTALS }
-  )
-
-  return { source: 'opencode-messages', byModel, totals }
+  return { source: 'opencode-messages', byModel, totals: sumModelTotals(byModel) }
 }
 
 export const loadOpenCodeSessions = async (

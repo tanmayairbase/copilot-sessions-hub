@@ -12,7 +12,7 @@ import type {
 } from '../shared/types'
 import { logError, logInfo, logWarn } from './logger'
 import { loadOpenCodeSessions } from './opencode'
-import { parseSessionArtifacts } from './parsers'
+import { matchFixedSessionSource, parseSessionArtifacts } from './parsers'
 import { isWithinRepoRoots } from './repo-roots'
 import {
   SessionStorage,
@@ -21,7 +21,7 @@ import {
 } from './storage'
 
 const MAX_FILE_SIZE_BYTES = 64 * 1024 * 1024
-const ARTIFACT_CACHE_PARSER_VERSION = 14
+const ARTIFACT_CACHE_PARSER_VERSION = 15
 
 const expandHome = (value: string): string =>
   value.startsWith('~/') ? join(homedir(), value.slice(2)) : value
@@ -68,6 +68,13 @@ export const getGlobalVsCodeChatPattern = (
   return `${normalizedHome}/.config/Code/User/workspaceStorage/*/chatSessions/*.jsonl`
 }
 
+export const getGlobalClaudeCodePattern = (
+  home: string = homedir()
+): string => {
+  const normalizedHome = normalizeGlobPath(home)
+  return `${normalizedHome}/.claude/projects/**/*.jsonl`
+}
+
 const globalCopilotPattern = (() => {
   const home = homedir()
   return getGlobalCopilotPattern(home)
@@ -77,6 +84,11 @@ const globalVsCodeChatPattern = (() => {
   const home = homedir()
   const appData = process.env.APPDATA || home
   return getGlobalVsCodeChatPattern(process.platform, home, appData)
+})()
+
+const globalClaudeCodePattern = (() => {
+  const home = homedir()
+  return getGlobalClaudeCodePattern(home)
 })()
 const COPILOT_SESSION_STORE_DB_PATH = join(
   homedir(),
@@ -176,11 +188,17 @@ interface CliSessionSummaryRow {
   summary: string
 }
 
-const detectSourceFromFilePath = (filePath: string): SessionSource =>
-  filePath.toLowerCase().includes('chatsessions') ||
-  filePath.toLowerCase().includes('vscode')
-    ? 'vscode'
-    : 'cli'
+const detectSourceFromFilePath = (filePath: string): SessionSource => {
+  const fixedSource = matchFixedSessionSource(filePath)
+  if (fixedSource) {
+    return fixedSource
+  }
+  const normalized = filePath.toLowerCase()
+  if (normalized.includes('chatsessions') || normalized.includes('vscode')) {
+    return 'vscode'
+  }
+  return 'cli'
+}
 
 const cliSummaryToken = (
   cliSummaryBySessionId: Map<string, string>
@@ -283,7 +301,7 @@ export const syncSessions = async (
   const files = new Set<string>()
   const scanStartedAt = performance.now()
 
-  const [repoRootEntries, globalEntries, globalVsCodeEntries] =
+  const [repoRootEntries, globalEntries, globalVsCodeEntries, globalClaudeCodeEntries] =
     await Promise.all([
       Promise.all(
         repoRoots.map(async root => {
@@ -327,6 +345,12 @@ export const syncSessions = async (
         onlyFiles: true,
         suppressErrors: true,
         unique: true
+      }),
+      fg(globalClaudeCodePattern, {
+        absolute: true,
+        onlyFiles: true,
+        suppressErrors: true,
+        unique: true
       })
     ])
 
@@ -349,6 +373,14 @@ export const syncSessions = async (
     pattern: globalVsCodeChatPattern
   })
   for (const entry of globalVsCodeEntries) {
+    files.add(entry)
+  }
+
+  logInfo('Scanned global Claude Code session path', {
+    filesFound: globalClaudeCodeEntries.length,
+    pattern: globalClaudeCodePattern
+  })
+  for (const entry of globalClaudeCodeEntries) {
     files.add(entry)
   }
   const scanDurationMs = Math.round(performance.now() - scanStartedAt)

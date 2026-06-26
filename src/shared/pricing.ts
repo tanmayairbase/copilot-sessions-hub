@@ -7,6 +7,7 @@ export interface ModelRate {
   input: number
   cachedInput: number
   cacheWrite: number
+  cacheWrite1h?: number
   output: number
 }
 
@@ -188,11 +189,82 @@ export const priceFor = (modelId: string): ModelRate | null => {
   return RATES[normalizeModelId(modelId)] ?? null
 }
 
+// Claude Code's own billing (subscription, API key, or enterprise contract) is
+// unrelated to the Copilot-served Anthropic rates in RATES above, even where a
+// number happens to coincide — keep this table and lookup entirely separate.
+// Prices are Anthropic's published API list prices, used as a labeled estimate.
+const CLAUDE_CODE_RATES: Record<string, ModelRate> = {
+  'claude-fable-5': {
+    provider: 'anthropic',
+    input: 10,
+    cachedInput: 1,
+    cacheWrite: 12.5,
+    cacheWrite1h: 20,
+    output: 50
+  },
+  'claude-mythos-5': {
+    provider: 'anthropic',
+    input: 10,
+    cachedInput: 1,
+    cacheWrite: 12.5,
+    cacheWrite1h: 20,
+    output: 50
+  },
+  'claude-opus-4-8': {
+    provider: 'anthropic',
+    input: 5,
+    cachedInput: 0.5,
+    cacheWrite: 6.25,
+    cacheWrite1h: 10,
+    output: 25
+  },
+  'claude-opus-4-7': {
+    provider: 'anthropic',
+    input: 5,
+    cachedInput: 0.5,
+    cacheWrite: 6.25,
+    cacheWrite1h: 10,
+    output: 25
+  },
+  'claude-opus-4-6': {
+    provider: 'anthropic',
+    input: 5,
+    cachedInput: 0.5,
+    cacheWrite: 6.25,
+    cacheWrite1h: 10,
+    output: 25
+  },
+  'claude-sonnet-4-6': {
+    provider: 'anthropic',
+    input: 3,
+    cachedInput: 0.3,
+    cacheWrite: 3.75,
+    cacheWrite1h: 6,
+    output: 15
+  },
+  'claude-haiku-4-5': {
+    provider: 'anthropic',
+    input: 1,
+    cachedInput: 0.1,
+    cacheWrite: 1.25,
+    cacheWrite1h: 2,
+    output: 5
+  }
+}
+
+const normalizeClaudeCodeModelId = (modelId: string): string =>
+  modelId.toLowerCase().replace(/-\d{8}$/, '')
+
+export const priceForClaudeCodeModel = (modelId: string): ModelRate | null => {
+  return CLAUDE_CODE_RATES[normalizeClaudeCodeModelId(modelId)] ?? null
+}
+
 export interface ModelTokenCounts {
   modelId: string
   inputTokens: number
   cachedInputTokens: number
   cacheWriteTokens: number
+  cacheWrite1hTokens: number
   outputTokens: number
   reasoningTokens: number
   requestCount?: number
@@ -225,6 +297,23 @@ export const computeCost = (counts: ModelTokenCounts): number | null => {
   )
 }
 
+// Claude's own usage.input_tokens already EXCLUDES cached tokens (unlike the
+// inclusive accounting billableInputTokens assumes), so it's billed as-is with
+// no subtraction. Thinking tokens are already folded into outputTokens at the
+// source, so reasoningTokens is intentionally not added here.
+export const computeClaudeCodeCost = (counts: ModelTokenCounts): number | null => {
+  const rate = priceForClaudeCodeModel(counts.modelId)
+  if (!rate) return null
+  return (
+    (counts.inputTokens * rate.input +
+      counts.cachedInputTokens * rate.cachedInput +
+      counts.cacheWriteTokens * rate.cacheWrite +
+      counts.cacheWrite1hTokens * (rate.cacheWrite1h ?? 0) +
+      counts.outputTokens * rate.output) /
+    1_000_000
+  )
+}
+
 export type CostTier = '$' | '$$' | '$$$'
 export type SessionCostCategory = CostTier | 'unavailable'
 
@@ -244,10 +333,13 @@ export const sessionEstimatedCost = (
     return null
   }
 
+  const computeModelCost =
+    usage.source === 'claude-messages' ? computeClaudeCodeCost : computeCost
+
   let total = 0
   let priced = false
   for (const model of usage.byModel) {
-    const cost = computeCost(model)
+    const cost = computeModelCost(model)
     if (cost !== null) {
       total += cost
       priced = true
