@@ -123,7 +123,7 @@ export const formatSessionOrigin = (origin: SessionSource): string => {
 
 export const formatAgentName = (source: SessionSource): string => {
   if (source === 'claude') {
-    return 'Claude Code'
+    return 'Claude'
   }
   return 'Copilot'
 }
