@@ -118,6 +118,9 @@ export const formatSessionOrigin = (origin: SessionSource): string => {
   if (origin === 'opencode') {
     return 'OpenCode'
   }
+  if (origin === 'claude') {
+    return 'Claude'
+  }
   return 'CLI'
 }
 
