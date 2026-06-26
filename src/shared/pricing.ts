@@ -264,7 +264,7 @@ export interface ModelTokenCounts {
   inputTokens: number
   cachedInputTokens: number
   cacheWriteTokens: number
-  cacheWrite1hTokens?: number
+  cacheWrite1hTokens: number
   outputTokens: number
   reasoningTokens: number
   requestCount?: number
@@ -308,7 +308,7 @@ export const computeClaudeCodeCost = (counts: ModelTokenCounts): number | null =
     (counts.inputTokens * rate.input +
       counts.cachedInputTokens * rate.cachedInput +
       counts.cacheWriteTokens * rate.cacheWrite +
-      (counts.cacheWrite1hTokens ?? 0) * (rate.cacheWrite1h ?? 0) +
+      counts.cacheWrite1hTokens * (rate.cacheWrite1h ?? 0) +
       counts.outputTokens * rate.output) /
     1_000_000
   )

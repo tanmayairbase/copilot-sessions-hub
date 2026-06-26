@@ -829,6 +829,7 @@ describe('parseSessionArtifacts', () => {
         inputTokens: 249568,
         cachedInputTokens: 211328,
         cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
         outputTokens: 4904,
         reasoningTokens: 3167,
         requestCount: 8
@@ -838,6 +839,7 @@ describe('parseSessionArtifacts', () => {
       inputTokens: 249568,
       cachedInputTokens: 211328,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 4904,
       reasoningTokens: 3167
     })
@@ -881,6 +883,7 @@ describe('parseSessionArtifacts', () => {
         inputTokens: 0,
         cachedInputTokens: 0,
         cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
         outputTokens: 0,
         reasoningTokens: 0
       }
@@ -1034,6 +1037,7 @@ describe('parseSessionArtifacts', () => {
       inputTokens: 1800,
       cachedInputTokens: 500,
       cacheWriteTokens: 200,
+      cacheWrite1hTokens: 0,
       outputTokens: 300,
       reasoningTokens: 80
     })
@@ -1500,6 +1504,85 @@ describe('Claude Code sessions', () => {
         answer: 'Yes, push now'
       }
     ])
+  })
+
+  it('parses the answer when tool_result content is an array of text blocks instead of a plain string', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'Should I push this commit?' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq-array-result'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-4-8',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_ask3',
+              name: 'AskUserQuestion',
+              input: {
+                questions: [
+                  {
+                    question: 'Push commit 20671ef to origin/master?',
+                    header: 'Push to remote',
+                    options: [
+                      { label: 'Yes, push now', description: 'Push the new commit to origin/master on GitHub.' },
+                      { label: 'No, hold off', description: 'Keep the commit local for now.' }
+                    ],
+                    multiSelect: false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq-array-result'
+      }),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u2',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'toolu_ask3',
+              content: [
+                {
+                  type: 'text',
+                  text:
+                    'Your questions have been answered: "Push commit 20671ef to origin/master?"="Yes, push now". You can now continue with these answers in mind.'
+                }
+              ]
+            }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:06.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq-array-result'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-askq-array-result.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    const askMessage = parsed[0].messages.find(
+      message => message.questions && message.questions.length > 0
+    )
+    expect(askMessage?.questions?.[0]?.answer).toBe('Yes, push now')
   })
 
   it('falls back to the raw tool_result text when the answer cannot be parsed', () => {

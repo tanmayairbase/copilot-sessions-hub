@@ -17,6 +17,7 @@ const modelUsage = (
   inputTokens: 0,
   cachedInputTokens: 0,
   cacheWriteTokens: 0,
+  cacheWrite1hTokens: 0,
   outputTokens: 0,
   reasoningTokens: 0,
   ...overrides
@@ -33,6 +34,7 @@ const usage = (
       inputTokens: totals.inputTokens + model.inputTokens,
       cachedInputTokens: totals.cachedInputTokens + model.cachedInputTokens,
       cacheWriteTokens: totals.cacheWriteTokens + model.cacheWriteTokens,
+      cacheWrite1hTokens: totals.cacheWrite1hTokens + model.cacheWrite1hTokens,
       outputTokens: totals.outputTokens + model.outputTokens,
       reasoningTokens: totals.reasoningTokens + model.reasoningTokens
     }),
@@ -40,6 +42,7 @@ const usage = (
       inputTokens: 0,
       cachedInputTokens: 0,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 0,
       reasoningTokens: 0
     }
@@ -167,6 +170,7 @@ describe('computeCost', () => {
       inputTokens: 249_568,
       cachedInputTokens: 211_328,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 4_904,
       reasoningTokens: 3_167
     })
@@ -183,6 +187,7 @@ describe('computeCost', () => {
       inputTokens: 100_000,
       cachedInputTokens: 50_000,
       cacheWriteTokens: 20_000,
+      cacheWrite1hTokens: 0,
       outputTokens: 4_000,
       reasoningTokens: 1_000
     })
@@ -198,6 +203,7 @@ describe('computeCost', () => {
       inputTokens: 1_000,
       cachedInputTokens: 1_200,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 100,
       reasoningTokens: 0
     })
@@ -211,6 +217,7 @@ describe('computeCost', () => {
         inputTokens: 1_000_000,
         cachedInputTokens: 0,
         cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
         outputTokens: 1_000_000,
         reasoningTokens: 0
       })
@@ -224,6 +231,7 @@ describe('computeCost', () => {
         inputTokens: 0,
         cachedInputTokens: 0,
         cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
         outputTokens: 0,
         reasoningTokens: 0
       })
@@ -242,6 +250,7 @@ describe('computeClaudeCodeCost', () => {
       inputTokens: 1_000,
       cachedInputTokens: 200,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 0,
       reasoningTokens: 0
     })
@@ -270,6 +279,7 @@ describe('computeClaudeCodeCost', () => {
       inputTokens: 1_000,
       cachedInputTokens: 0,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 500,
       reasoningTokens: 0
     })
@@ -278,6 +288,7 @@ describe('computeClaudeCodeCost', () => {
       inputTokens: 1_000,
       cachedInputTokens: 0,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 500,
       reasoningTokens: 9_999
     })
@@ -291,6 +302,7 @@ describe('computeClaudeCodeCost', () => {
         inputTokens: 1_000_000,
         cachedInputTokens: 0,
         cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
         outputTokens: 1_000_000,
         reasoningTokens: 0
       })
