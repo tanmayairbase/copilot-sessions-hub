@@ -1,4 +1,4 @@
-export type SessionSource = 'cli' | 'vscode' | 'opencode'
+export type SessionSource = 'cli' | 'vscode' | 'opencode' | 'claude'
 export type SessionExecutionMode = 'plan' | 'autopilot'
 
 export type DiscoveryMode = 'autodiscovery' | 'explicit' | 'both'
@@ -10,6 +10,7 @@ export interface ModelTokenUsage {
   inputTokens: number
   cachedInputTokens: number
   cacheWriteTokens: number
+  cacheWrite1hTokens?: number
   outputTokens: number
   reasoningTokens: number
   requestCount?: number
@@ -18,12 +19,14 @@ export interface ModelTokenUsage {
 export type TokenUsageSource =
   | 'cli-shutdown'
   | 'opencode-messages'
+  | 'claude-messages'
   | 'unavailable'
 
 export interface SessionTokenUsageTotals {
   inputTokens: number
   cachedInputTokens: number
   cacheWriteTokens: number
+  cacheWrite1hTokens?: number
   outputTokens: number
   reasoningTokens: number
 }
@@ -74,6 +77,7 @@ export interface SessionMessage {
   role: 'user' | 'assistant'
   mode?: SessionExecutionMode | null
   content: string
+  thinking?: string
   format: 'markdown' | 'text' | 'ansi'
   timestamp: string
   userStarred?: boolean
@@ -88,6 +92,13 @@ export interface SessionMessage {
     endLine?: number
     addedLines?: number
     removedLines?: number
+  }>
+  questions?: Array<{
+    question: string
+    header?: string
+    options: Array<{ label: string; description: string }>
+    multiSelect: boolean
+    answer: string
   }>
 }
 

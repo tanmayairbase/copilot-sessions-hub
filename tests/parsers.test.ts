@@ -1039,3 +1039,634 @@ describe('parseSessionArtifacts', () => {
     })
   })
 })
+
+describe('Claude Code sessions', () => {
+  it('parses a user/assistant exchange from a Claude Code project log', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        parentUuid: null,
+        isSidechain: false,
+        message: { role: 'user', content: 'Can you fix the bug?' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-1',
+        permissionMode: 'default',
+        version: '2.1.181',
+        gitBranch: 'main'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        parentUuid: 'u1',
+        isSidechain: false,
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [{ type: 'text', text: 'Sure, fixed it.' }]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-1',
+        version: '2.1.181',
+        gitBranch: 'main'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-1.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].session.id).toBe('session-claude-1')
+    expect(parsed[0].session.source).toBe('claude')
+    expect(parsed[0].session.repoPath).toBe('/tmp/repo-claude')
+    expect(parsed[0].session.model).toBe('claude-sonnet-4-6')
+    expect(parsed[0].messages).toHaveLength(2)
+    expect(parsed[0].messages[0]).toMatchObject({
+      role: 'user',
+      content: 'Can you fix the bug?'
+    })
+    expect(parsed[0].messages[1]).toMatchObject({
+      role: 'assistant',
+      content: 'Sure, fixed it.'
+    })
+  })
+
+  it('skips a "user" turn whose content is only a tool_result block', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'Run the tests' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-2'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'Bash',
+              input: { command: 'npm test' }
+            }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-2'
+      }),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u2',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_1', content: 'All tests passed.' }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:06.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-2'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a2',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [{ type: 'text', text: 'All tests passed.' }]
+        },
+        timestamp: '2026-01-01T10:00:07.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-2'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-2.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    expect(parsed).toHaveLength(1)
+    // The tool_use-only assistant turn and the tool_result-only user turn
+    // both have no human-readable text and should not appear as messages.
+    expect(parsed[0].messages).toHaveLength(2)
+    expect(parsed[0].messages[0]).toMatchObject({
+      role: 'user',
+      content: 'Run the tests'
+    })
+    expect(parsed[0].messages[1]).toMatchObject({
+      role: 'assistant',
+      content: 'All tests passed.'
+    })
+  })
+
+  it('captures a thinking block alongside the assistant text', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'Why does this fail?' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-thinking'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-4-8',
+          content: [
+            { type: 'thinking', thinking: 'Let me trace the stack trace first.' },
+            { type: 'text', text: 'It fails because the index is out of range.' }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-thinking'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-thinking.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    expect(parsed[0].messages[1]).toMatchObject({
+      role: 'assistant',
+      content: 'It fails because the index is out of range.',
+      thinking: 'Let me trace the stack trace first.'
+    })
+  })
+
+  it('keeps a thinking-only assistant message instead of dropping it', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'Investigate this.' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-thinking-only'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-4-8',
+          content: [
+            { type: 'thinking', thinking: 'Considering the right approach...' }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-thinking-only'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-thinking-only.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    expect(parsed[0].messages).toHaveLength(2)
+    expect(parsed[0].messages[1]).toMatchObject({
+      role: 'assistant',
+      content: '',
+      thinking: 'Considering the right approach...'
+    })
+  })
+
+  it('prefers the ai-title event over the first user message for the title', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: {
+          role: 'user',
+          content:
+            'can you read the code and open the sip-rebalance/ page locally?'
+        },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-title'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [{ type: 'text', text: 'Opening it now.' }]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-title'
+      }),
+      JSON.stringify({
+        type: 'ai-title',
+        aiTitle: 'Open sip-rebalance page locally',
+        sessionId: 'session-claude-title'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-title.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    expect(parsed[0].session.title).toBe('Open sip-rebalance page locally')
+  })
+
+  it('maps Claude permissionMode to plan/autopilot, with no mode for default', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'First, make a plan.' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-modes',
+        permissionMode: 'plan'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [{ type: 'text', text: 'Here is the plan.' }]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-modes'
+      }),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u2',
+        message: { role: 'user', content: 'Looks good, go ahead.' },
+        timestamp: '2026-01-01T10:01:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-modes',
+        permissionMode: 'acceptEdits'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a2',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [{ type: 'text', text: 'Implementing now.' }]
+        },
+        timestamp: '2026-01-01T10:01:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-modes'
+      }),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u3',
+        message: { role: 'user', content: 'One more thing.' },
+        timestamp: '2026-01-01T10:02:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-modes',
+        permissionMode: 'default'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-modes.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    expect(parsed[0].messages[0]?.mode).toBe('plan')
+    expect(parsed[0].messages[2]?.mode).toBe('autopilot')
+    expect(parsed[0].messages[4]?.mode).toBeUndefined()
+    expect(parsed[0].session.modes).toEqual(['plan', 'autopilot'])
+    expect(parsed[0].session.latestMode).toBe('autopilot')
+  })
+
+  it('does not treat bypassPermissions as an autopilot signal (it is a standing skip-prompts setting, not a plan/autopilot transition)', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'Investigate the failing test.' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-bypass-permissions',
+        permissionMode: 'bypassPermissions'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [{ type: 'text', text: 'Looking into it.' }]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-bypass-permissions'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-bypass-permissions.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    expect(parsed[0].messages[0]?.mode).toBeUndefined()
+    expect(parsed[0].session.modes).toBeUndefined()
+    expect(parsed[0].session.latestMode).toBeNull()
+  })
+
+  it('parses an AskUserQuestion tool call and its answer from the templated result', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'Should I push this commit?' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-4-8',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_ask1',
+              name: 'AskUserQuestion',
+              input: {
+                questions: [
+                  {
+                    question: 'Push commit 20671ef to origin/master?',
+                    header: 'Push to remote',
+                    options: [
+                      { label: 'Yes, push now', description: 'Push the new commit to origin/master on GitHub.' },
+                      { label: 'No, hold off', description: 'Keep the commit local for now.' }
+                    ],
+                    multiSelect: false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq'
+      }),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u2',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'toolu_ask1',
+              content:
+                'Your questions have been answered: "Push commit 20671ef to origin/master?"="Yes, push now". You can now continue with these answers in mind.'
+            }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:06.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a2',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-4-8',
+          content: [{ type: 'text', text: 'Pushing now.' }]
+        },
+        timestamp: '2026-01-01T10:00:07.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-askq.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    const askMessage = parsed[0].messages.find(
+      message => message.questions && message.questions.length > 0
+    )
+    expect(askMessage?.questions).toEqual([
+      {
+        question: 'Push commit 20671ef to origin/master?',
+        header: 'Push to remote',
+        options: [
+          { label: 'Yes, push now', description: 'Push the new commit to origin/master on GitHub.' },
+          { label: 'No, hold off', description: 'Keep the commit local for now.' }
+        ],
+        multiSelect: false,
+        answer: 'Yes, push now'
+      }
+    ])
+  })
+
+  it('falls back to the raw tool_result text when the answer cannot be parsed', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'Pick an option.' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq-fallback'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-4-8',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_ask2',
+              name: 'AskUserQuestion',
+              input: {
+                questions: [
+                  {
+                    question: 'Deploy to staging?',
+                    header: 'Deploy',
+                    options: [
+                      { label: 'Yes', description: 'Deploy now.' },
+                      { label: 'No', description: 'Hold off.' }
+                    ],
+                    multiSelect: false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq-fallback'
+      }),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u2',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'toolu_ask2',
+              content: 'User dismissed the question without a structured answer.'
+            }
+          ]
+        },
+        timestamp: '2026-01-01T10:00:06.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-askq-fallback'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-askq-fallback.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    const askMessage = parsed[0].messages.find(
+      message => message.questions && message.questions.length > 0
+    )
+    expect(askMessage?.questions?.[0]?.answer).toBe(
+      'User dismissed the question without a structured answer.'
+    )
+  })
+
+  it('aggregates per-message usage into a claude-messages token usage summary', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'Investigate the regression.' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-usage'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [{ type: 'text', text: 'Looking into it.' }],
+          usage: {
+            input_tokens: 100,
+            cache_read_input_tokens: 500,
+            cache_creation_input_tokens: 300,
+            cache_creation: {
+              ephemeral_5m_input_tokens: 50,
+              ephemeral_1h_input_tokens: 250
+            },
+            output_tokens: 80
+          }
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-usage'
+      }),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u2',
+        message: { role: 'user', content: 'Keep going.' },
+        timestamp: '2026-01-01T10:01:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-usage'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a2',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [{ type: 'text', text: 'Found the bug.' }],
+          usage: {
+            input_tokens: 20,
+            cache_read_input_tokens: 700,
+            cache_creation_input_tokens: 100,
+            cache_creation: {
+              ephemeral_5m_input_tokens: 0,
+              ephemeral_1h_input_tokens: 100
+            },
+            output_tokens: 40
+          }
+        },
+        timestamp: '2026-01-01T10:01:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-usage'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-usage.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    const usage = parsed[0].session.tokenUsage
+    expect(usage?.source).toBe('claude-messages')
+    expect(usage?.byModel).toHaveLength(1)
+    expect(usage?.byModel[0]).toMatchObject({
+      modelId: 'claude-sonnet-4-6',
+      inputTokens: 120,
+      cachedInputTokens: 1200,
+      cacheWriteTokens: 50,
+      cacheWrite1hTokens: 350,
+      outputTokens: 120,
+      reasoningTokens: 0
+    })
+    expect(usage?.totals).toMatchObject({
+      inputTokens: 120,
+      cachedInputTokens: 1200,
+      cacheWriteTokens: 50,
+      cacheWrite1hTokens: 350,
+      outputTokens: 120,
+      reasoningTokens: 0
+    })
+  })
+})

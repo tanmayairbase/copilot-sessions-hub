@@ -374,4 +374,103 @@ describe('SessionDetailView grouping', () => {
       screen.getByText('Now implement it.').closest('article')?.className
     ).toContain('message-mode-autopilot')
   })
+
+  it('renders a thinking-only assistant message as a collapsible disclosure instead of an empty bubble', () => {
+    const thinkingDetail: SessionDetail = {
+      ...detail,
+      id: 's-thinking',
+      messages: [
+        {
+          id: 'm-thinking',
+          sessionId: 's-thinking',
+          role: 'assistant',
+          content: '',
+          thinking: 'Considering the right approach...',
+          format: 'text',
+          timestamp: '2026-03-11T10:05:00.000Z'
+        }
+      ]
+    }
+
+    render(<SessionDetailView detail={thinkingDetail} />)
+
+    const bubble = screen.getByLabelText('assistant message')
+    const disclosure = bubble.querySelector('details.message-thinking')
+    expect(disclosure).toBeTruthy()
+    expect(disclosure?.hasAttribute('open')).toBe(false)
+    expect(screen.getByText('Considering the right approach...')).toBeTruthy()
+  })
+
+  it('renders an AskUserQuestion-only assistant message as a Q&A block instead of an empty bubble', () => {
+    const questionDetail: SessionDetail = {
+      ...detail,
+      id: 's-question',
+      messages: [
+        {
+          id: 'm-question',
+          sessionId: 's-question',
+          role: 'assistant',
+          content: '',
+          format: 'text',
+          timestamp: '2026-03-11T10:05:00.000Z',
+          questions: [
+            {
+              question: 'Push commit 20671ef to origin/master?',
+              header: 'Push to remote',
+              options: [
+                { label: 'Yes, push now', description: 'Push it.' },
+                { label: 'No, hold off', description: 'Keep it local.' }
+              ],
+              multiSelect: false,
+              answer: 'Yes, push now'
+            }
+          ]
+        }
+      ]
+    }
+
+    render(<SessionDetailView detail={questionDetail} />)
+
+    const bubble = screen.getByLabelText('assistant message')
+    expect(
+      bubble.querySelector('.message-questions')
+    ).toBeTruthy()
+    expect(
+      screen.getByText('Push commit 20671ef to origin/master?')
+    ).toBeTruthy()
+    expect(screen.getByText('Yes, push now')).toBeTruthy()
+  })
+
+  it('keeps thinking and questions when a thinking-only turn merges with a same-minute text reply', () => {
+    const mergedDetail: SessionDetail = {
+      ...detail,
+      id: 's-merged-thinking',
+      messages: [
+        {
+          id: 'm-think-first',
+          sessionId: 's-merged-thinking',
+          role: 'assistant',
+          content: '',
+          thinking: 'Let me check the file first.',
+          format: 'text',
+          timestamp: '2026-03-11T10:05:00.000Z'
+        },
+        {
+          id: 'm-text-second',
+          sessionId: 's-merged-thinking',
+          role: 'assistant',
+          content: 'Here is the answer.',
+          format: 'text',
+          timestamp: '2026-03-11T10:05:20.000Z'
+        }
+      ]
+    }
+
+    render(<SessionDetailView detail={mergedDetail} />)
+
+    const bubbles = screen.getAllByLabelText('assistant message')
+    expect(bubbles).toHaveLength(1)
+    expect(screen.getByText('Let me check the file first.')).toBeTruthy()
+    expect(screen.getByText(/Here is the answer\./)).toBeTruthy()
+  })
 })
