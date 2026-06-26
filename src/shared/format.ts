@@ -119,7 +119,7 @@ export const formatSessionOrigin = (origin: SessionSource): string => {
     return 'OpenCode'
   }
   if (origin === 'claude') {
-    return 'Claude'
+    return 'Claude Code'
   }
   return 'CLI'
 }
