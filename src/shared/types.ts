@@ -10,7 +10,7 @@ export interface ModelTokenUsage {
   inputTokens: number
   cachedInputTokens: number
   cacheWriteTokens: number
-  cacheWrite1hTokens?: number
+  cacheWrite1hTokens: number
   outputTokens: number
   reasoningTokens: number
   requestCount?: number
@@ -26,7 +26,7 @@ export interface SessionTokenUsageTotals {
   inputTokens: number
   cachedInputTokens: number
   cacheWriteTokens: number
-  cacheWrite1hTokens?: number
+  cacheWrite1hTokens: number
   outputTokens: number
   reasoningTokens: number
 }

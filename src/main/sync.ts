@@ -12,7 +12,7 @@ import type {
 } from '../shared/types'
 import { logError, logInfo, logWarn } from './logger'
 import { loadOpenCodeSessions } from './opencode'
-import { parseSessionArtifacts } from './parsers'
+import { matchFixedSessionSource, parseSessionArtifacts } from './parsers'
 import { isWithinRepoRoots } from './repo-roots'
 import {
   SessionStorage,
@@ -189,10 +189,11 @@ interface CliSessionSummaryRow {
 }
 
 const detectSourceFromFilePath = (filePath: string): SessionSource => {
-  const normalized = filePath.toLowerCase()
-  if (normalized.includes('/.claude/projects/') || normalized.includes('\\.claude\\projects\\')) {
-    return 'claude'
+  const fixedSource = matchFixedSessionSource(filePath)
+  if (fixedSource) {
+    return fixedSource
   }
+  const normalized = filePath.toLowerCase()
   if (normalized.includes('chatsessions') || normalized.includes('vscode')) {
     return 'vscode'
   }

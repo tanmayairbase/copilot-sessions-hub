@@ -7,6 +7,7 @@ const model = (overrides: Partial<ModelTokenUsage> & { modelId: string }): Model
   inputTokens: 0,
   cachedInputTokens: 0,
   cacheWriteTokens: 0,
+  cacheWrite1hTokens: 0,
   outputTokens: 0,
   reasoningTokens: 0,
   ...overrides
@@ -18,6 +19,7 @@ const usage = (byModel: ModelTokenUsage[]): SessionTokenUsage => {
       inputTokens: acc.inputTokens + m.inputTokens,
       cachedInputTokens: acc.cachedInputTokens + m.cachedInputTokens,
       cacheWriteTokens: acc.cacheWriteTokens + m.cacheWriteTokens,
+      cacheWrite1hTokens: acc.cacheWrite1hTokens + m.cacheWrite1hTokens,
       outputTokens: acc.outputTokens + m.outputTokens,
       reasoningTokens: acc.reasoningTokens + m.reasoningTokens
     }),
@@ -25,6 +27,7 @@ const usage = (byModel: ModelTokenUsage[]): SessionTokenUsage => {
       inputTokens: 0,
       cachedInputTokens: 0,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       outputTokens: 0,
       reasoningTokens: 0
     }
@@ -111,6 +114,7 @@ describe('TokenUsageTooltipContent', () => {
             inputTokens: 0,
             cachedInputTokens: 0,
             cacheWriteTokens: 0,
+            cacheWrite1hTokens: 0,
             outputTokens: 0,
             reasoningTokens: 0
           }

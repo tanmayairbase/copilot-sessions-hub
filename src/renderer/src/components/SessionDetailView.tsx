@@ -456,6 +456,7 @@ export const SessionDetailView = ({
                 inputTokens: 0,
                 cachedInputTokens: 0,
                 cacheWriteTokens: 0,
+                cacheWrite1hTokens: 0,
                 outputTokens: 0,
                 reasoningTokens: 0
               }
