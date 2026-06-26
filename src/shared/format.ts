@@ -118,7 +118,17 @@ export const formatSessionOrigin = (origin: SessionSource): string => {
   if (origin === 'opencode') {
     return 'OpenCode'
   }
+  if (origin === 'claude') {
+    return 'Claude Code'
+  }
   return 'CLI'
+}
+
+export const formatAgentName = (source: SessionSource): string => {
+  if (source === 'claude') {
+    return 'Claude'
+  }
+  return 'Copilot'
 }
 
 export const matchesRepositoryFilter = (
