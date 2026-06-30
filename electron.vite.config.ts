@@ -11,6 +11,9 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react()],
+    optimizeDeps: {
+      include: ['mermaid']
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
