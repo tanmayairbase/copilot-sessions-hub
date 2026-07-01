@@ -1,26 +1,96 @@
 import React, { useEffect, useState } from 'react'
 import type {
   AppConfig,
+  AppUpdateStatus,
   AppearancePreference,
   AutoDiscoveredPatternInfo,
   DiscoveryMode,
-  SyncMode
+  SyncMode,
+  UpdateDownloadProgress
 } from '@shared/types'
 
 interface Props {
   isOpen: boolean
   config: AppConfig | null
   autoDiscoveredPatterns: AutoDiscoveredPatternInfo[]
+  updateStatus: AppUpdateStatus | null
+  isCheckingUpdates: boolean
+  isDownloadingUpdate: boolean
+  updateDownloadProgress: UpdateDownloadProgress | null
+  updateError: string | null
   onClose: () => void
   onSave: (next: AppConfig) => Promise<void>
+  onCheckUpdates: () => Promise<void>
+  onDownloadUpdate: () => Promise<void>
+  onDismissUpdate: () => Promise<void>
+}
+
+const formatRelativeUpdateCheckTime = (
+  value: string | null | undefined
+): string => {
+  if (!value) {
+    return 'Never'
+  }
+
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) {
+    return 'Unknown'
+  }
+
+  const elapsedMs = Math.max(0, Date.now() - timestamp)
+  const elapsedSeconds = Math.floor(elapsedMs / 1000)
+  if (elapsedSeconds < 60) {
+    return 'Just now'
+  }
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60)
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60)
+  if (elapsedHours < 24) {
+    return `${elapsedHours}h ago`
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24)
+  return `${elapsedDays}d ago`
+}
+
+const formatDownloadProgress = (
+  progress: UpdateDownloadProgress | null
+): string | null => {
+  if (!progress) {
+    return null
+  }
+  if (progress.phase === 'verifying') {
+    return 'Verifying download...'
+  }
+  if (progress.phase === 'opening') {
+    return 'Opening DMG...'
+  }
+  if (progress.phase === 'complete') {
+    return 'DMG opened.'
+  }
+  return progress.percent === null
+    ? 'Downloading update...'
+    : `Downloading update... ${progress.percent}%`
 }
 
 export const SettingsModal = ({
   isOpen,
   config,
   autoDiscoveredPatterns,
+  updateStatus,
+  isCheckingUpdates,
+  isDownloadingUpdate,
+  updateDownloadProgress,
+  updateError,
   onClose,
-  onSave
+  onSave,
+  onCheckUpdates,
+  onDownloadUpdate,
+  onDismissUpdate
 }: Props) => {
   const [repoRoots, setRepoRoots] = useState('')
   const [explicitPatterns, setExplicitPatterns] = useState('')
@@ -50,6 +120,9 @@ export const SettingsModal = ({
   if (!isOpen) {
     return null
   }
+
+  const latestUpdate = updateStatus?.latest ?? null
+  const downloadProgressText = formatDownloadProgress(updateDownloadProgress)
 
   const submit = async (): Promise<void> => {
     setIsSaving(true)
@@ -90,6 +163,61 @@ export const SettingsModal = ({
       <div className="modal">
         <h3>Settings</h3>
         <p>Control app appearance and where session sync looks for data.</p>
+
+        <section className="settings-updates" aria-label="Updates">
+          <div className="settings-updates-header">
+            <div>
+              <h4>Updates</h4>
+              <p>
+                Current version: {updateStatus?.currentVersion ?? 'Unknown'}
+              </p>
+              <p>
+                Last checked:{' '}
+                {formatRelativeUpdateCheckTime(
+                  updateStatus?.lastCheckedAt ?? null
+                )}
+              </p>
+            </div>
+            <div className="settings-updates-check">
+              <button
+                type="button"
+                onClick={() => void onCheckUpdates()}
+                disabled={isCheckingUpdates || isDownloadingUpdate}
+              >
+                {isCheckingUpdates ? 'Checking...' : 'Check for updates'}
+              </button>
+              <div className="settings-updates-status">
+                {latestUpdate ? (
+                  <p>Version {latestUpdate.version} is available.</p>
+                ) : (
+                  <p>AgentStash is up to date.</p>
+                )}
+              </div>
+            </div>
+          </div>
+          {downloadProgressText && <p>{downloadProgressText}</p>}
+          {updateError && (
+            <p className="modal-error">Update failed: {updateError}</p>
+          )}
+          {latestUpdate && (
+            <div className="settings-updates-actions">
+              <button
+                type="button"
+                onClick={() => void onDownloadUpdate()}
+                disabled={isDownloadingUpdate}
+              >
+                {isDownloadingUpdate ? 'Downloading...' : 'Download update'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void onDismissUpdate()}
+                disabled={isDownloadingUpdate}
+              >
+                Dismiss this version
+              </button>
+            </div>
+          )}
+        </section>
 
         <label>
           Appearance

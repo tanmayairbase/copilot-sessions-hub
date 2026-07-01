@@ -9,6 +9,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AppConfig,
+  AppUpdateStatus,
   RendererApi,
   SessionDetail,
   SessionSummary,
@@ -52,6 +53,30 @@ const syncResult: SyncResult = {
   durationSeconds: 1,
   errors: []
 }
+
+const updateStatus: AppUpdateStatus = {
+  currentVersion: '11.0.0',
+  latest: null,
+  lastCheckedAt: null,
+  dismissedVersion: null,
+  updateAvailable: false,
+  notificationVisible: false
+}
+
+const updateApiStubs = (): Pick<
+  RendererApi,
+  | 'getUpdateStatus'
+  | 'checkForUpdates'
+  | 'downloadLatestUpdate'
+  | 'dismissLatestUpdate'
+  | 'onUpdateDownloadProgress'
+> => ({
+  getUpdateStatus: vi.fn(async () => updateStatus),
+  checkForUpdates: vi.fn(async () => updateStatus),
+  downloadLatestUpdate: vi.fn(async () => updateStatus),
+  dismissLatestUpdate: vi.fn(async () => updateStatus),
+  onUpdateDownloadProgress: vi.fn(() => () => undefined)
+})
 
 const buildDetail = (messageCount: number): SessionDetail => ({
   ...baseSession,
@@ -118,7 +143,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -185,7 +211,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -236,7 +263,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -296,7 +324,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -391,7 +420,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -483,17 +513,20 @@ describe('App sync detail refresh', () => {
         const detail = buildDetail(1)
         return {
           ...detail,
-          ...(sessions.find(session => session.id === sessionId) ?? budgetSession),
+          ...(sessions.find(session => session.id === sessionId) ??
+            budgetSession),
           messages: detail.messages
         }
       }),
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
-    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions = api
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
 
     render(<App />)
 
@@ -567,17 +600,20 @@ describe('App sync detail refresh', () => {
         const detail = buildDetail(1)
         return {
           ...detail,
-          ...(sessions.find(session => session.id === sessionId) ?? sessions[0]!),
+          ...(sessions.find(session => session.id === sessionId) ??
+            sessions[0]!),
           messages: detail.messages
         }
       }),
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
-    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions = api
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
 
     render(<App />)
 

@@ -8,7 +8,7 @@ import {
   within
 } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AppConfig } from '../src/shared/types'
+import type { AppConfig, AppUpdateStatus } from '../src/shared/types'
 import { SettingsModal } from '../src/renderer/src/components/SettingsModal'
 
 const baseConfig: AppConfig = {
@@ -18,6 +18,26 @@ const baseConfig: AppConfig = {
   appearance: 'system',
   syncMode: 'manual',
   backgroundSyncIntervalMinutes: 10
+}
+
+const updateStatus: AppUpdateStatus = {
+  currentVersion: '11.0.0',
+  latest: null,
+  lastCheckedAt: null,
+  dismissedVersion: null,
+  updateAvailable: false,
+  notificationVisible: false
+}
+
+const updateProps = {
+  updateStatus,
+  isCheckingUpdates: false,
+  isDownloadingUpdate: false,
+  updateDownloadProgress: null,
+  updateError: null,
+  onCheckUpdates: vi.fn(async () => undefined),
+  onDownloadUpdate: vi.fn(async () => undefined),
+  onDismissUpdate: vi.fn(async () => undefined)
 }
 
 describe('SettingsModal', () => {
@@ -34,6 +54,7 @@ describe('SettingsModal', () => {
         isOpen={true}
         config={baseConfig}
         autoDiscoveredPatterns={[]}
+        {...updateProps}
         onClose={onClose}
         onSave={onSave}
       />
@@ -67,6 +88,7 @@ describe('SettingsModal', () => {
         isOpen={true}
         config={baseConfig}
         autoDiscoveredPatterns={[]}
+        {...updateProps}
         onClose={onClose}
         onSave={onSave}
       />
@@ -112,6 +134,7 @@ describe('SettingsModal', () => {
         isOpen={true}
         config={baseConfig}
         autoDiscoveredPatterns={[]}
+        {...updateProps}
         onClose={onClose}
         onSave={onSave}
       />
@@ -146,6 +169,7 @@ describe('SettingsModal', () => {
             pattern: '/Users/me/.claude/projects/**/*.jsonl'
           }
         ]}
+        {...updateProps}
         onClose={vi.fn()}
         onSave={vi.fn(async () => undefined)}
       />
@@ -163,6 +187,7 @@ describe('SettingsModal', () => {
         isOpen={true}
         config={baseConfig}
         autoDiscoveredPatterns={[]}
+        {...updateProps}
         onClose={vi.fn()}
         onSave={vi.fn(async () => undefined)}
       />

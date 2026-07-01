@@ -5,10 +5,12 @@ import { logError, logInfo, logWarn } from './logger'
 import { openInCli, openInVscode } from './openers'
 import { SessionStorage } from './storage'
 import { getAutoDiscoveredPatterns, syncSessions } from './sync'
+import { UpdateService } from './updates'
 
 export const registerIpcHandlers = (
   storage: SessionStorage,
-  configService: ConfigService
+  configService: ConfigService,
+  updateService: UpdateService
 ): void => {
   logInfo('Registering IPC handlers')
 
@@ -50,6 +52,57 @@ export const registerIpcHandlers = (
     logInfo('IPC sessions:sync')
     const config = await configService.load()
     return syncSessions(config, storage)
+  })
+
+  ipcMain.handle('updates:get-status', async () => {
+    logInfo('IPC updates:get-status')
+    return updateService.getStatus()
+  })
+
+  ipcMain.handle(
+    'updates:check',
+    async (_event, options?: { force?: boolean }) => {
+      logInfo('IPC updates:check', { force: Boolean(options?.force) })
+      return updateService.checkForUpdates({ force: Boolean(options?.force) })
+    }
+  )
+
+  ipcMain.handle('updates:dismiss-latest', async () => {
+    logInfo('IPC updates:dismiss-latest')
+    return updateService.dismissLatest()
+  })
+
+  ipcMain.handle('updates:download-latest', async event => {
+    logInfo('IPC updates:download-latest')
+    try {
+      const result = await updateService.downloadLatest(progress => {
+        event.sender.send('updates:download-progress', progress)
+      })
+      event.sender.send('updates:download-progress', {
+        phase: 'opening',
+        bytesReceived: result.status.latest?.assetSize ?? 0,
+        totalBytes: result.status.latest?.assetSize ?? null,
+        percent: 100,
+        filePath: result.filePath
+      })
+      const openResult = await shell.openPath(result.filePath)
+      if (openResult) {
+        throw new Error(openResult)
+      }
+      event.sender.send('updates:download-progress', {
+        phase: 'complete',
+        bytesReceived: result.status.latest?.assetSize ?? 0,
+        totalBytes: result.status.latest?.assetSize ?? null,
+        percent: 100,
+        filePath: result.filePath
+      })
+      return result.status
+    } catch (error) {
+      logError('Failed downloading latest app update', {
+        reason: (error as Error).message
+      })
+      throw error
+    }
   })
 
   ipcMain.handle('sessions:list', async (_event, query: string) => {
