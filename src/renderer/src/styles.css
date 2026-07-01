@@ -1154,6 +1154,34 @@ button:hover {
   color: var(--text-code);
 }
 
+.mermaid-diagram {
+  margin: 0 0 10px 0;
+  padding: 12px;
+  background: var(--surface-code-block);
+  border: 1px solid var(--border-code);
+  border-radius: 8px;
+  overflow: auto;
+  text-align: center;
+}
+
+.mermaid-diagram:last-child {
+  margin-bottom: 0;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-diagram-error {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-code);
+}
+
 .ansi-output {
   white-space: pre-wrap;
   overflow: auto;
