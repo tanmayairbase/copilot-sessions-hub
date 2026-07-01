@@ -76,19 +76,14 @@ const extractClaudeTextBlocks = (content: unknown): string => {
   return extractClaudeBlocksOfType(content, 'text')
 }
 
-const mapClaudePermissionMode = (value: unknown): SessionExecutionMode | null => {
-  const normalized = firstString(value)?.trim()
-  if (normalized === 'plan') {
-    return 'plan'
-  }
-  // bypassPermissions is a standing "skip all permission prompts" setting
-  // (the --dangerously-skip-permissions equivalent) — it says nothing about a
-  // plan -> autopilot transition, unlike acceptEdits, so it gets no mode.
-  if (normalized === 'acceptEdits') {
-    return 'autopilot'
-  }
-  return null
-}
+// Claude Code's permission modes are default / acceptEdits / plan /
+// bypassPermissions — there is NO "autopilot" mode (that's Copilot's term, and
+// only the Copilot parser should ever produce it). Plan mode is the only one
+// worth surfacing as a badge; acceptEdits ("⏵⏵ accept edits on") and
+// bypassPermissions (--dangerously-skip-permissions) are standing permission
+// settings, and default is the baseline, so none of them get a mode.
+const mapClaudePermissionMode = (value: unknown): SessionExecutionMode | null =>
+  firstString(value)?.trim() === 'plan' ? 'plan' : null
 
 const extractClaudeThinkingBlocks = (content: unknown): string =>
   extractClaudeBlocksOfType(content, 'thinking')
