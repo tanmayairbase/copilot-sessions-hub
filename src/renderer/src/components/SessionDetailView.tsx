@@ -23,8 +23,9 @@ import {
   normalizeModelLabel
 } from '@shared/format'
 import { TokenUsageBarWithTooltip } from './TokenUsageBarWithTooltip'
+import { MermaidDiagram } from './MermaidDiagram'
 
-type TranscriptTheme = 'light' | 'dark'
+export type TranscriptTheme = 'light' | 'dark'
 
 const createAnsiConverter = (theme: TranscriptTheme): AnsiToHtml =>
   new AnsiToHtml({
@@ -61,6 +62,9 @@ const normalizeRenderedLinks = (html: string): string => {
 
 const MERMAID_DIAGRAM_CLASS = 'mermaid-diagram'
 
+// Mermaid renders asynchronously, so it can't be inlined into the synchronous
+// markdown-to-HTML string. We emit an empty placeholder here and hand the source
+// off to a <MermaidDiagram> component during segmentation (see toContentParts).
 const markdownRenderer = new Marked({ breaks: true }).use({
   renderer: {
     code({ text, lang }) {
@@ -76,104 +80,76 @@ const markdownRenderer = new Marked({ breaks: true }).use({
   }
 })
 
-interface MermaidRenderResult {
-  svg: string
-  error: boolean
-}
+type ContentPart =
+  | { kind: 'html'; html: string }
+  | { kind: 'mermaid'; source: string }
 
-// Rendered diagrams are cached by theme + source and embedded back into the
-// markdown HTML string. That keeps the SVG part of React's stable output so it
-// survives the re-renders that sync triggers, instead of being imperatively
-// injected (and then wiped) on every refresh.
-const mermaidRenderCache = new Map<string, MermaidRenderResult>()
+const renderMarkdownContent = (content: string): string =>
+  normalizeRenderedLinks(markdownRenderer.parse(content) as string)
 
-const mermaidCacheKey = (theme: TranscriptTheme, source: string): string =>
-  `${theme}\u0000${source}`
-
-let mermaidModulePromise: Promise<
-  (typeof import('mermaid'))['default']
-> | null = null
-
-const loadMermaid = (): Promise<(typeof import('mermaid'))['default']> => {
-  if (!mermaidModulePromise) {
-    mermaidModulePromise = import('mermaid').then(module => module.default)
-    mermaidModulePromise.catch(() => {
-      mermaidModulePromise = null
-    })
-  }
-  return mermaidModulePromise
-}
-
-// mermaid shares global state and is not safe to call concurrently, so every
-// render is queued behind the previous one.
-let mermaidRenderChain: Promise<unknown> = Promise.resolve()
-
-const renderMermaidDiagram = (
-  mermaid: (typeof import('mermaid'))['default'],
-  theme: TranscriptTheme,
-  source: string
-): Promise<string> => {
-  const run = mermaidRenderChain.then(async () => {
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: theme === 'light' ? 'default' : 'dark'
-    })
-    const renderId = `mermaid-${Math.random().toString(36).slice(2)}`
-    const { svg } = await mermaid.render(renderId, source)
-    return svg
-  })
-  mermaidRenderChain = run.then(
-    () => undefined,
-    () => undefined
-  )
-  return run
-}
-
-const embedCachedMermaid = (html: string, theme: TranscriptTheme): string => {
+// Split rendered markdown into an ordered list of HTML chunks and mermaid
+// diagrams. The HTML chunks stay a single dangerouslySetInnerHTML, while each
+// diagram becomes a <MermaidDiagram> that owns its own async SVG.
+const toContentParts = (html: string): ContentPart[] => {
   if (typeof document === 'undefined' || !html.includes(MERMAID_DIAGRAM_CLASS)) {
-    return html
+    return [{ kind: 'html', html }]
   }
 
   const template = document.createElement('template')
   template.innerHTML = html
 
-  for (const node of template.content.querySelectorAll<HTMLElement>(
-    `.${MERMAID_DIAGRAM_CLASS}`
-  )) {
-    const source = decodeURIComponent(node.dataset.mermaidSource ?? '')
-    if (!source) {
-      continue
-    }
+  const parts: ContentPart[] = []
+  let buffer: ChildNode[] = []
 
-    const cached = mermaidRenderCache.get(mermaidCacheKey(theme, source))
-    if (!cached) {
-      continue
+  const flush = (): void => {
+    if (buffer.length === 0) {
+      return
     }
-
-    if (cached.error) {
-      node.textContent = source
-      node.classList.add(`${MERMAID_DIAGRAM_CLASS}-error`)
-    } else {
-      node.innerHTML = cached.svg
+    const holder = document.createElement('div')
+    for (const node of buffer) {
+      holder.appendChild(node)
     }
-    node.dataset.mermaidTheme = theme
+    parts.push({ kind: 'html', html: holder.innerHTML })
+    buffer = []
   }
 
-  return template.innerHTML
+  for (const node of Array.from(template.content.childNodes)) {
+    if (
+      node instanceof HTMLElement &&
+      node.classList.contains(MERMAID_DIAGRAM_CLASS)
+    ) {
+      const source = decodeURIComponent(node.dataset.mermaidSource ?? '')
+      if (source.trim()) {
+        flush()
+        parts.push({ kind: 'mermaid', source })
+        continue
+      }
+    }
+    buffer.push(node)
+  }
+  flush()
+
+  return parts
 }
 
-const renderMarkdownContent = (
-  content: string,
+const MessageContent = ({
+  parts,
+  theme
+}: {
+  parts: ContentPart[]
   theme: TranscriptTheme
-): string =>
-  embedCachedMermaid(
-    normalizeRenderedLinks(markdownRenderer.parse(content) as string),
-    theme
-  )
+}) => (
+  <>
+    {parts.map((part, index) =>
+      part.kind === 'mermaid' ? (
+        <MermaidDiagram key={index} source={part.source} theme={theme} />
+      ) : (
+        <div key={index} dangerouslySetInnerHTML={{ __html: part.html }} />
+      )
+    )}
+  </>
+)
 
-const renderUserContent = (content: string, theme: TranscriptTheme): string =>
-  renderMarkdownContent(content, theme)
 const DETAIL_CHUNK_SIZE = 220
 const SCROLL_CONTROL_EDGE_THRESHOLD = 28
 const SCROLL_CONTROL_REVEAL_THRESHOLD = 140
@@ -358,7 +334,6 @@ export const SessionDetailView = ({
   const [visibleCount, setVisibleCount] = useState(DETAIL_CHUNK_SIZE)
   const [scrollControlAction, setScrollControlAction] =
     useState<ScrollControlAction>(null)
-  const [mermaidRenderTick, setMermaidRenderTick] = useState(0)
 
   const syncScrollControls = useCallback(() => {
     const thread = threadRef.current
@@ -417,83 +392,26 @@ export const SessionDetailView = ({
   }, [groupedMessages, visibleCount])
 
   const renderAssistantContent = useCallback(
-    (content: string): string => {
-      if (content.includes('\u001b[')) {
-        return `<pre class="ansi-output">${ansiConverter.toHtml(content)}</pre>`
+    (content: string): ContentPart[] => {
+      if (content.includes('[')) {
+        return [
+          {
+            kind: 'html',
+            html: `<pre class="ansi-output">${ansiConverter.toHtml(content)}</pre>`
+          }
+        ]
       }
 
-      return renderMarkdownContent(content, theme)
+      return toContentParts(renderMarkdownContent(content))
     },
-    [ansiConverter, theme]
+    [ansiConverter]
   )
 
-  useEffect(() => {
-    const thread = threadRef.current
-    if (!thread) {
-      return
-    }
-
-    const sources = new Set<string>()
-    for (const node of thread.querySelectorAll<HTMLElement>(
-      `.${MERMAID_DIAGRAM_CLASS}`
-    )) {
-      const source = decodeURIComponent(node.dataset.mermaidSource ?? '')
-      if (
-        source.trim() &&
-        !mermaidRenderCache.has(mermaidCacheKey(theme, source))
-      ) {
-        sources.add(source)
-      }
-    }
-
-    if (sources.size === 0) {
-      return
-    }
-
-    let cancelled = false
-
-    void (async () => {
-      let mermaid: (typeof import('mermaid'))['default']
-      try {
-        mermaid = await loadMermaid()
-      } catch (error) {
-        console.error('Failed to load mermaid for diagram rendering', error)
-        return
-      }
-      if (cancelled) {
-        return
-      }
-
-      let produced = false
-      for (const source of sources) {
-        if (cancelled) {
-          return
-        }
-
-        const key = mermaidCacheKey(theme, source)
-        if (mermaidRenderCache.has(key)) {
-          continue
-        }
-
-        try {
-          const svg = await renderMermaidDiagram(mermaid, theme, source)
-          mermaidRenderCache.set(key, { svg, error: false })
-        } catch (error) {
-          console.error('Failed to render mermaid diagram', error)
-          mermaidRenderCache.set(key, { svg: '', error: true })
-        }
-        produced = true
-      }
-
-      if (!cancelled && produced) {
-        setMermaidRenderTick(tick => tick + 1)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [theme, visibleMessages, mermaidRenderTick])
+  const renderUserParts = useCallback(
+    (content: string): ContentPart[] =>
+      toContentParts(renderMarkdownContent(content)),
+    []
+  )
 
   useLayoutEffect(() => {
     if (!detail) {
@@ -793,19 +711,14 @@ export const SessionDetailView = ({
                 </div>
               )}
               <div className="message-content">
-                {message.role === 'assistant' ? (
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: renderAssistantContent(message.combinedContent)
-                    }}
-                  />
-                ) : (
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: renderUserContent(message.combinedContent, theme)
-                    }}
-                  />
-                )}
+                <MessageContent
+                  parts={
+                    message.role === 'assistant'
+                      ? renderAssistantContent(message.combinedContent)
+                      : renderUserParts(message.combinedContent)
+                  }
+                  theme={theme}
+                />
               </div>
               <time className="message-time">
                 {formatTimestampIST(message.timestamp)}
