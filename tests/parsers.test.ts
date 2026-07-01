@@ -1303,7 +1303,7 @@ describe('Claude Code sessions', () => {
     expect(parsed[0].session.title).toBe('Open sip-rebalance page locally')
   })
 
-  it('maps Claude permissionMode to plan/autopilot, with no mode for default', () => {
+  it('maps Claude plan mode to plan; acceptEdits and default get no mode (Claude Code has no autopilot)', () => {
     const raw = [
       JSON.stringify({
         type: 'user',
@@ -1366,10 +1366,57 @@ describe('Claude Code sessions', () => {
     })
 
     expect(parsed[0].messages[0]?.mode).toBe('plan')
-    expect(parsed[0].messages[2]?.mode).toBe('autopilot')
+    // acceptEdits is a permission setting, not autopilot — Claude has no such mode.
+    expect(parsed[0].messages[2]?.mode).toBeUndefined()
     expect(parsed[0].messages[4]?.mode).toBeUndefined()
-    expect(parsed[0].session.modes).toEqual(['plan', 'autopilot'])
-    expect(parsed[0].session.latestMode).toBe('autopilot')
+    expect(parsed[0].session.modes).toEqual(['plan'])
+    expect(parsed[0].session.latestMode).toBe('plan')
+  })
+
+  it('never labels a Claude acceptEdits turn as autopilot, even standing from the first message with no plan', () => {
+    const raw = [
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: 'Let us build the feature.' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-standing-accept',
+        permissionMode: 'acceptEdits'
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a1',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          content: [{ type: 'text', text: 'On it.' }]
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-standing-accept'
+      }),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u2',
+        message: { role: 'user', content: 'One more thing.' },
+        timestamp: '2026-01-01T10:01:00.000Z',
+        cwd: '/tmp/repo-claude',
+        sessionId: 'session-claude-standing-accept',
+        permissionMode: 'default'
+      })
+    ].join('\n')
+
+    const parsed = parseSessionArtifacts(raw, {
+      filePath:
+        '/Users/me/.claude/projects/-tmp-repo-claude/session-claude-standing-accept.jsonl',
+      repoRoot: '/tmp/repo-claude',
+      source: 'claude'
+    })
+
+    expect(parsed[0].messages[0]?.mode).toBeUndefined()
+    expect(parsed[0].session.modes).toBeUndefined()
+    expect(parsed[0].session.latestMode).toBeNull()
   })
 
   it('does not treat bypassPermissions as an autopilot signal (it is a standing skip-prompts setting, not a plan/autopilot transition)', () => {
