@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/tanmayairbase/copilot-sessions-hub/releases/latest">Download</a> •
+  <a href="https://github.com/tanmayairbase/AgentStash/releases/latest">Download</a> •
   <a href="#features">Features</a> •
   <a href="#documentation">Documentation</a> •
   <a href="#development">Development</a> •
@@ -23,7 +23,7 @@
 <p align="center">
   <img width="1398" height="901" alt="AgentStash screenshot" src="https://github.com/user-attachments/assets/274fa0f2-f7e5-48ab-b15c-183f029b8f09" />
 ...
-  <img width="1727" height="513" alt="Status_and_Copilot_Sessions_Hub" src="https://github.com/user-attachments/assets/0ca69550-510c-4fa2-b5ea-1d88bf80d4a4" />
+  <img width="1727" height="513" alt="AgentStash" src="https://github.com/user-attachments/assets/0ca69550-510c-4fa2-b5ea-1d88bf80d4a4" />
 
 </p>
 
