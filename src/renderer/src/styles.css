@@ -208,6 +208,21 @@ button:hover {
   gap: 8px;
 }
 
+.topbar-button-with-dot {
+  position: relative;
+}
+
+.topbar-button-with-dot::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent-danger);
+}
+
 .layout {
   display: flex;
   min-height: 0;
@@ -1289,6 +1304,8 @@ button:hover {
 
 .modal {
   width: min(720px, 92vw);
+  max-height: 85vh;
+  overflow: auto;
   background: var(--surface-panel);
   border: 1px solid var(--border-default);
   border-radius: 12px;
@@ -1320,6 +1337,13 @@ button:hover {
 }
 
 .modal-actions {
+  position: sticky;
+  bottom: -16px;
+  z-index: 1;
+  margin: 0 -16px -16px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -1335,6 +1359,39 @@ button:hover {
   padding: 8px 10px;
   display: grid;
   gap: 6px;
+}
+
+.settings-updates {
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.settings-updates h4 {
+  margin: 0 0 4px;
+}
+
+.settings-updates-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-updates-check {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  text-align: right;
+}
+
+.settings-updates-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .settings-auto-discovery ul {

@@ -143,6 +143,33 @@ export interface AutoDiscoveredPatternInfo {
   pattern: string
 }
 
+export interface AppUpdateInfo {
+  version: string
+  releaseUrl: string
+  publishedAt: string
+  assetName: string
+  assetUrl: string
+  assetSize: number
+  assetDigest: string | null
+}
+
+export interface AppUpdateStatus {
+  currentVersion: string
+  latest: AppUpdateInfo | null
+  lastCheckedAt: string | null
+  dismissedVersion: string | null
+  updateAvailable: boolean
+  notificationVisible: boolean
+}
+
+export interface UpdateDownloadProgress {
+  phase: 'downloading' | 'verifying' | 'opening' | 'complete'
+  bytesReceived: number
+  totalBytes: number | null
+  percent: number | null
+  filePath?: string
+}
+
 export interface RendererApi {
   getConfig: () => Promise<AppConfig>
   saveConfig: (config: AppConfig) => Promise<AppConfig>
@@ -165,4 +192,11 @@ export interface RendererApi {
     starred: boolean
   ) => Promise<MessageStarRecord | null>
   listStarredMessages: (query: string) => Promise<StarredMessageSummary[]>
+  getUpdateStatus: () => Promise<AppUpdateStatus>
+  checkForUpdates: (options?: { force?: boolean }) => Promise<AppUpdateStatus>
+  downloadLatestUpdate: () => Promise<AppUpdateStatus>
+  dismissLatestUpdate: () => Promise<AppUpdateStatus>
+  onUpdateDownloadProgress: (
+    listener: (progress: UpdateDownloadProgress) => void
+  ) => () => void
 }

@@ -9,6 +9,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AppConfig,
+  AppUpdateStatus,
   RendererApi,
   SessionDetail,
   SessionSummary,
@@ -52,6 +53,49 @@ const syncResult: SyncResult = {
   durationSeconds: 1,
   errors: []
 }
+
+const updateStatus: AppUpdateStatus = {
+  currentVersion: '11.0.0',
+  latest: null,
+  lastCheckedAt: null,
+  dismissedVersion: null,
+  updateAvailable: false,
+  notificationVisible: false
+}
+
+const availableUpdateStatus: AppUpdateStatus = {
+  currentVersion: '11.0.0',
+  latest: {
+    version: '12.0.0',
+    releaseUrl:
+      'https://github.com/tanmayairbase/AgentStash/releases/tag/12.0.0',
+    publishedAt: '2026-07-01T00:00:00.000Z',
+    assetName: 'AgentStash-12.0.0-arm64.dmg',
+    assetUrl:
+      'https://github.com/tanmayairbase/AgentStash/releases/download/12.0.0/AgentStash-12.0.0-arm64.dmg',
+    assetSize: 123,
+    assetDigest: 'abc123'
+  },
+  lastCheckedAt: '2026-07-01T00:00:00.000Z',
+  dismissedVersion: null,
+  updateAvailable: true,
+  notificationVisible: true
+}
+
+const updateApiStubs = (): Pick<
+  RendererApi,
+  | 'getUpdateStatus'
+  | 'checkForUpdates'
+  | 'downloadLatestUpdate'
+  | 'dismissLatestUpdate'
+  | 'onUpdateDownloadProgress'
+> => ({
+  getUpdateStatus: vi.fn(async () => updateStatus),
+  checkForUpdates: vi.fn(async () => updateStatus),
+  downloadLatestUpdate: vi.fn(async () => updateStatus),
+  dismissLatestUpdate: vi.fn(async () => updateStatus),
+  onUpdateDownloadProgress: vi.fn(() => () => undefined)
+})
 
 const buildDetail = (messageCount: number): SessionDetail => ({
   ...baseSession,
@@ -118,7 +162,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -144,6 +189,88 @@ describe('App sync detail refresh', () => {
 
     expect(api.syncSessions).toHaveBeenCalledTimes(1)
     expect(api.getSessionDetail).toHaveBeenCalledTimes(2)
+  })
+
+  it('labels Settings accessibly when an update is available', async () => {
+    const api: RendererApi = {
+      getConfig: vi.fn(async () => config),
+      saveConfig: vi.fn(async () => config),
+      openConfigFile: vi.fn(async () => undefined),
+      getAutoDiscoveredPatterns: vi.fn(async () => []),
+      syncSessions: vi.fn(async () => syncResult),
+      listSessions: vi.fn(async () => [baseSession]),
+      getSessionDetail: vi.fn(async () => buildDetail(1)),
+      openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
+      setSessionArchived: vi.fn(async () => null),
+      setMessageStarred: vi.fn(async () => null),
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs(),
+      getUpdateStatus: vi.fn(async () => availableUpdateStatus),
+      checkForUpdates: vi.fn(async () => availableUpdateStatus)
+    }
+
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Settings, update available' })
+      ).toBeTruthy()
+    })
+  })
+
+  it('queues a forced update check behind an in-flight background check', async () => {
+    let resolveBackgroundCheck: (status: AppUpdateStatus) => void = () =>
+      undefined
+    const backgroundCheck = new Promise<AppUpdateStatus>(resolve => {
+      resolveBackgroundCheck = resolve
+    })
+    const checkForUpdates = vi
+      .fn<RendererApi['checkForUpdates']>()
+      .mockImplementationOnce(async () => backgroundCheck)
+      .mockImplementationOnce(async () => availableUpdateStatus)
+
+    const api: RendererApi = {
+      getConfig: vi.fn(async () => config),
+      saveConfig: vi.fn(async () => config),
+      openConfigFile: vi.fn(async () => undefined),
+      getAutoDiscoveredPatterns: vi.fn(async () => []),
+      syncSessions: vi.fn(async () => syncResult),
+      listSessions: vi.fn(async () => [baseSession]),
+      getSessionDetail: vi.fn(async () => buildDetail(1)),
+      openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
+      setSessionArchived: vi.fn(async () => null),
+      setMessageStarred: vi.fn(async () => null),
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs(),
+      checkForUpdates
+    }
+
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
+
+    expect(screen.getByRole('button', { name: 'Checking...' })).toBeDisabled()
+    expect(checkForUpdates).toHaveBeenCalledTimes(1)
+
+    resolveBackgroundCheck(updateStatus)
+
+    await waitFor(() => {
+      expect(checkForUpdates).toHaveBeenCalledTimes(2)
+      expect(checkForUpdates).toHaveBeenLastCalledWith({ force: true })
+      expect(
+        screen.getByRole('button', { name: 'Settings, update available' })
+      ).toBeTruthy()
+    })
   })
 
   it('schedules periodic background sync and prevents overlap storms', async () => {
@@ -185,7 +312,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -236,7 +364,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -296,7 +425,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -391,7 +521,8 @@ describe('App sync detail refresh', () => {
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
     ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
@@ -483,17 +614,20 @@ describe('App sync detail refresh', () => {
         const detail = buildDetail(1)
         return {
           ...detail,
-          ...(sessions.find(session => session.id === sessionId) ?? budgetSession),
+          ...(sessions.find(session => session.id === sessionId) ??
+            budgetSession),
           messages: detail.messages
         }
       }),
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
-    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions = api
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
 
     render(<App />)
 
@@ -567,17 +701,20 @@ describe('App sync detail refresh', () => {
         const detail = buildDetail(1)
         return {
           ...detail,
-          ...(sessions.find(session => session.id === sessionId) ?? sessions[0]!),
+          ...(sessions.find(session => session.id === sessionId) ??
+            sessions[0]!),
           messages: detail.messages
         }
       }),
       openSessionInTool: vi.fn(async () => ({ ok: true, message: 'ok' })),
       setSessionArchived: vi.fn(async () => null),
       setMessageStarred: vi.fn(async () => null),
-      listStarredMessages: vi.fn(async () => [])
+      listStarredMessages: vi.fn(async () => []),
+      ...updateApiStubs()
     }
 
-    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions = api
+    ;(window as Window & { copilotSessions?: RendererApi }).copilotSessions =
+      api
 
     render(<App />)
 

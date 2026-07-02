@@ -8,6 +8,7 @@ import React, {
 } from 'react'
 import type {
   AppConfig,
+  AppUpdateStatus,
   AppearancePreference,
   AutoDiscoveredPatternInfo,
   RendererApi,
@@ -15,7 +16,8 @@ import type {
   SessionSource,
   SessionSummary,
   StarredMessageSummary,
-  SyncResult
+  SyncResult,
+  UpdateDownloadProgress
 } from '@shared/types'
 import type { DateFilterPreset } from '@shared/format'
 import {
@@ -44,6 +46,7 @@ const SIDEBAR_MAX_WIDTH = 620
 const DETAIL_MIN_WIDTH = 320
 const RESIZER_WIDTH = 6
 const SEARCH_DEBOUNCE_MS = 140
+const UPDATE_CHECK_INTERVAL_MS = 48 * 60 * 60 * 1000
 const DEFAULT_BACKGROUND_SYNC_INTERVAL_MINUTES = 10
 const MIN_BACKGROUND_SYNC_INTERVAL_MINUTES = 1
 const MAX_BACKGROUND_SYNC_INTERVAL_MINUTES = 1440
@@ -80,6 +83,11 @@ interface SyncWaiter {
 interface PendingSyncRequest {
   source: SyncSource
   waiters: SyncWaiter[]
+}
+
+interface PendingUpdateCheck {
+  force: boolean
+  showErrors: boolean
 }
 
 interface BackgroundSyncStatus {
@@ -175,6 +183,12 @@ export const App = () => {
   const [showSettings, setShowSettings] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null)
+  const [updateError, setUpdateError] = useState<string | null>(null)
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false)
+  const [isDownloadingUpdate, setIsDownloadingUpdate] = useState(false)
+  const [updateDownloadProgress, setUpdateDownloadProgress] =
+    useState<UpdateDownloadProgress | null>(null)
   const [selectedRepos, setSelectedRepos] = useState<string[]>([])
   const [selectedModels, setSelectedModels] = useState<string[]>([])
   const [selectedEstimatedCosts, setSelectedEstimatedCosts] = useState<
@@ -200,6 +214,8 @@ export const App = () => {
   const searchQueryRef = useRef('')
   const syncInFlightRef = useRef(false)
   const queuedSyncRef = useRef<PendingSyncRequest | null>(null)
+  const updateCheckInFlightRef = useRef(false)
+  const queuedUpdateCheckRef = useRef<PendingUpdateCheck | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const value = Number(
       window.localStorage.getItem(SIDEBAR_WIDTH_KEY) ?? '360'
@@ -217,9 +233,93 @@ export const App = () => {
     return apiRef
   }, [apiRef])
 
+  const requestUpdateCheck = useCallback(
+    async (force: boolean, showErrors: boolean): Promise<void> => {
+      if (updateCheckInFlightRef.current) {
+        if (force || showErrors) {
+          const queued = queuedUpdateCheckRef.current
+          queuedUpdateCheckRef.current = {
+            force: force || queued?.force === true,
+            showErrors: showErrors || queued?.showErrors === true
+          }
+          if (force) {
+            setIsCheckingUpdates(true)
+          }
+          if (showErrors) {
+            setUpdateError(null)
+          }
+        }
+        return
+      }
+      updateCheckInFlightRef.current = true
+      if (force) {
+        setIsCheckingUpdates(true)
+      }
+      if (showErrors) {
+        setUpdateError(null)
+      }
+      try {
+        const status = await ensureApi().checkForUpdates({ force })
+        setUpdateStatus(status)
+      } catch (error) {
+        if (showErrors) {
+          setUpdateError((error as Error).message)
+        }
+        uiLog('Update check failed', { message: (error as Error).message })
+      } finally {
+        const queued = queuedUpdateCheckRef.current
+        queuedUpdateCheckRef.current = null
+        updateCheckInFlightRef.current = false
+        if (queued) {
+          void requestUpdateCheck(queued.force, queued.showErrors)
+        } else if (force) {
+          setIsCheckingUpdates(false)
+        }
+      }
+    },
+    [ensureApi]
+  )
+
+  const onDownloadUpdate = useCallback(async (): Promise<void> => {
+    setIsDownloadingUpdate(true)
+    setUpdateError(null)
+    setUpdateDownloadProgress(null)
+    try {
+      const status = await ensureApi().downloadLatestUpdate()
+      setUpdateStatus(status)
+      setToast('Update DMG opened. Drag AgentStash to Applications to install.')
+    } catch (error) {
+      setUpdateError((error as Error).message)
+      try {
+        setUpdateStatus(await ensureApi().getUpdateStatus())
+      } catch (statusError) {
+        uiLog('Failed refreshing update status after download error', {
+          message: (statusError as Error).message
+        })
+      }
+    } finally {
+      setIsDownloadingUpdate(false)
+    }
+  }, [ensureApi])
+
+  const onDismissUpdate = useCallback(async (): Promise<void> => {
+    try {
+      setUpdateStatus(await ensureApi().dismissLatestUpdate())
+    } catch (error) {
+      setUpdateError((error as Error).message)
+    }
+  }, [ensureApi])
+
   useEffect(() => {
     selectedIdRef.current = selectedId
   }, [selectedId])
+
+  useEffect(() => {
+    const unsubscribe = ensureApi().onUpdateDownloadProgress(progress => {
+      setUpdateDownloadProgress(progress)
+    })
+    return unsubscribe
+  }, [ensureApi])
 
   useEffect(() => {
     searchQueryRef.current = searchQuery
@@ -348,13 +448,16 @@ export const App = () => {
           ensureApi().getConfig(),
           ensureApi().getAutoDiscoveredPatterns()
         ])
+        const loadedUpdateStatus = await ensureApi().getUpdateStatus()
         setConfig(loadedConfig)
         setAutoDiscoveredPatterns(loadedAutoDiscoveredPatterns)
+        setUpdateStatus(loadedUpdateStatus)
         uiLog('Config loaded in renderer', {
           repoRoots: loadedConfig.repoRoots.length,
           discoveryMode: loadedConfig.discoveryMode,
           appearance: loadedConfig.appearance
         })
+        void requestUpdateCheck(false, false)
         await refreshList('', { refreshAllStars: true })
       } catch (error) {
         const message = `Init failed: ${(error as Error).message}`
@@ -364,7 +467,30 @@ export const App = () => {
     }
 
     void init()
-  }, [ensureApi, refreshList])
+  }, [ensureApi, refreshList, requestUpdateCheck])
+
+  useEffect(() => {
+    const requestThrottledCheck = (): void => {
+      void requestUpdateCheck(false, false)
+    }
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'visible') {
+        requestThrottledCheck()
+      }
+    }
+
+    window.addEventListener('focus', requestThrottledCheck)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    const timer = window.setInterval(
+      requestThrottledCheck,
+      UPDATE_CHECK_INTERVAL_MS
+    )
+    return () => {
+      window.removeEventListener('focus', requestThrottledCheck)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.clearInterval(timer)
+    }
+  }, [requestUpdateCheck])
 
   useEffect(() => {
     if (!selectedId) {
@@ -1009,6 +1135,16 @@ export const App = () => {
             type="button"
             onClick={() => setShowSettings(true)}
             disabled={!config}
+            aria-label={
+              updateStatus?.notificationVisible && !isDownloadingUpdate
+                ? 'Settings, update available'
+                : 'Settings'
+            }
+            className={
+              updateStatus?.notificationVisible && !isDownloadingUpdate
+                ? 'topbar-button-with-dot'
+                : undefined
+            }
           >
             Settings
           </button>
@@ -1096,8 +1232,16 @@ export const App = () => {
         isOpen={showSettings}
         config={config}
         autoDiscoveredPatterns={autoDiscoveredPatterns}
+        updateStatus={updateStatus}
+        isCheckingUpdates={isCheckingUpdates}
+        isDownloadingUpdate={isDownloadingUpdate}
+        updateDownloadProgress={updateDownloadProgress}
+        updateError={updateError}
         onClose={() => setShowSettings(false)}
         onSave={onSaveConfig}
+        onCheckUpdates={() => requestUpdateCheck(true, true)}
+        onDownloadUpdate={onDownloadUpdate}
+        onDismissUpdate={onDismissUpdate}
       />
       <SessionStatsModal
         isOpen={showStats}

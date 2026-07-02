@@ -7,6 +7,7 @@ import { registerExternalLinkHandlers } from './external-links'
 import { registerIpcHandlers } from './ipc'
 import { initializeLogger, logInfo, logWarn } from './logger'
 import { SessionStorage } from './storage'
+import { UpdateService } from './updates'
 
 const APP_DISPLAY_NAME = 'AgentStash'
 const CANONICAL_USER_DATA_DIR = 'Copilot Sessions Hub'
@@ -150,9 +151,14 @@ app.whenReady().then(async () => {
   const configService = new ConfigService(
     join(app.getPath('userData'), 'config.json')
   )
+  const updateService = new UpdateService(
+    join(app.getPath('userData'), 'update-state.json'),
+    app.getVersion(),
+    app.getPath('downloads')
+  )
   const initialConfig = await configService.load()
 
-  registerIpcHandlers(storage, configService)
+  registerIpcHandlers(storage, configService, updateService)
   await createWindow(initialConfig.appearance)
 
   app.on('activate', () => {

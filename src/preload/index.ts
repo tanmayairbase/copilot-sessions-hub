@@ -58,6 +58,21 @@ const api: RendererApi = {
   getAutoDiscoveredPatterns: async () =>
     ipcRenderer.invoke('config:get-auto-discovered-patterns'),
   syncSessions: async () => ipcRenderer.invoke('sessions:sync'),
+  getUpdateStatus: async () => ipcRenderer.invoke('updates:get-status'),
+  checkForUpdates: async (options?: { force?: boolean }) =>
+    ipcRenderer.invoke('updates:check', options),
+  downloadLatestUpdate: async () =>
+    ipcRenderer.invoke('updates:download-latest'),
+  dismissLatestUpdate: async () => ipcRenderer.invoke('updates:dismiss-latest'),
+  onUpdateDownloadProgress: listener => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: unknown) => {
+      listener(progress as Parameters<typeof listener>[0])
+    }
+    ipcRenderer.on('updates:download-progress', handler)
+    return () => {
+      ipcRenderer.removeListener('updates:download-progress', handler)
+    }
+  },
   listSessions: async (query: string) =>
     ipcRenderer.invoke('sessions:list', query),
   listStarredMessages: async (query: string) =>
